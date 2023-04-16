@@ -1,0 +1,14 @@
+{
+  "inbounds": [
+    {
+      "port": 14270,
+      "protocol": "socks5",
+      "auth": [
+        {
+          "password": "",
+          "user": ""
+        }
+      ]
+    }
+  ]
+}
