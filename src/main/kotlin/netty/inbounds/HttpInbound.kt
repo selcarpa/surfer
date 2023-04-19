@@ -1,4 +1,4 @@
-package netty
+package netty.inbounds
 
 import io.klogging.NoCoLogging
 import io.netty.bootstrap.Bootstrap

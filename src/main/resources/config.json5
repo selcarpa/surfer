@@ -1,0 +1,39 @@
+{
+  "inbounds": [
+    {
+      "port": 14270,
+      "protocol": "socks5",
+      "socks5Settings": [
+        {
+          "auth": [
+            {
+              "password": "",
+              "user": ""
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "outbounds": [
+//    {
+//      "protocol": "galaxy"
+//    },
+    {
+      "protocol": "trojan",
+      "streamBy": {
+        "type": "ws",
+        "wsSettings": [
+          {
+            "port": 443,
+            "host": "newstart.straw.ml",
+            "path": "/f"
+          }
+        ]
+      },
+      "trojanSetting": {
+        "password": "26eb6def-aa89-47cf-8fce-10e014659234"
+      }
+    }
+  ]
+}
