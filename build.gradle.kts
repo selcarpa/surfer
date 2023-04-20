@@ -2,6 +2,7 @@ plugins {
     kotlin("jvm") version "1.8.0"
     application
     id("com.github.johnrengelman.shadow") version "7.1.2"
+    idea
 }
 
 group = "one.tain"
@@ -22,6 +23,14 @@ tasks.test {
     useJUnitPlatform()
 }
 
+idea {
+    module{
+        isDownloadJavadoc = true
+        isDownloadSources = true
+    }
+}
+
+
 kotlin {
     jvmToolchain(11)
 }
@@ -29,3 +38,4 @@ kotlin {
 application {
     mainClass.set("MainKt")
 }
+

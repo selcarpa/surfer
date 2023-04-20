@@ -5,8 +5,8 @@ import io.netty.channel.Channel
 import io.netty.channel.EventLoopGroup
 import io.netty.handler.codec.socksx.v5.DefaultSocks5CommandRequest
 import io.netty.handler.codec.socksx.v5.Socks5AddressType
-import model.config.ProxyProtocolSetting
-import model.config.TrojanSetting
+import model.config.*
+import java.util.*
 
 class OutBounds {
     companion object : NoCoLogging {
@@ -26,7 +26,7 @@ class OutBounds {
                         socks5AddressType,
                         clientWorkGroup,
                         serverChannel,
-                        proxyProtocolSetting as TrojanSetting
+                        proxyProtocolSetting
                     )
                 }
 
@@ -35,5 +35,12 @@ class OutBounds {
                 }
             }
         }
+
+        fun resolveOutbound(inbound: Inbound): Optional<Outbound> {
+            //todo do resolve outbound
+            return ConfigurationHolder.configuration.outbounds.stream().filter { true }.findFirst()
+        }
     }
+
+
 }

@@ -38,7 +38,7 @@ class TrojanOutboundHandler(private val trojanSetting: TrojanSetting) : ChannelO
                 content.append(msg.dstAddr())
                 content.append(msg.dstPort())
                 content.append("\r\n")
-//                content.append(msg.)
+                content.append(msg)
             }
         }
     }

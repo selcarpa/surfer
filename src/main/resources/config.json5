@@ -3,22 +3,18 @@
     {
       "port": 14270,
       "protocol": "socks5",
-      "socks5Settings": [
-        {
-          "auth": [
-            {
-              "password": "",
-              "user": ""
-            }
-          ]
-        }
-      ]
+      "socks5Setting": {
+//        "auth": {
+//          "password": "1",
+//          "username": "1"
+//        }
+      }
     }
   ],
   "outbounds": [
-//    {
-//      "protocol": "galaxy"
-//    },
+    //    {
+    //      "protocol": "galaxy"
+    //    },
     {
       "protocol": "trojan",
       "streamBy": {

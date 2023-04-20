@@ -4,13 +4,13 @@ import com.google.gson.Gson
 import java.io.File
 
 data class Configuration(val inbounds: List<Inbound>, val outbounds: List<Outbound>)
-data class Inbound(val port: Int, val protocol: String, val socks5Settings: List<Socks5Setting>)
-data class Socks5Setting(val auth: List<Auth>)
-data class Auth(val password: String, val user: String)
+data class Inbound(val port: Int, val protocol: String, val socks5Setting: Socks5Setting?)
+data class Socks5Setting(val auth: Auth?)
+data class Auth(val password: String, val username: String)
 data class Outbound(val protocol: String, val trojanSetting: TrojanSetting?, val streamBy: StreamBy)
 data class StreamBy(val type: String, val wsSettings: List<WsSetting>)
 data class WsSetting(val path: String, val port: Int, val host: String)
-data class TrojanSetting(val password: String):ProxyProtocolSetting()
+data class TrojanSetting(val password: String) : ProxyProtocolSetting()
 open class ProxyProtocolSetting()
 
 class ConfigurationHolder private constructor() {

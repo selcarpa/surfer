@@ -16,8 +16,8 @@ import model.config.ConfigurationHolder
  * netty服务端配置
  */
 class NettyServer : NoCoLogging {
-    val bossGroup: EventLoopGroup = NioEventLoopGroup()
-    val workerGroup: EventLoopGroup = NioEventLoopGroup()
+    private val bossGroup: EventLoopGroup = NioEventLoopGroup()
+    private val workerGroup: EventLoopGroup = NioEventLoopGroup()
     fun start() {
         val bootstrap = ServerBootstrap()
             .group(bossGroup, workerGroup) // 绑定线程池
