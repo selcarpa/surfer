@@ -11,6 +11,8 @@ import model.config.ConfigurationHolder
 import model.config.Inbound
 import model.config.Outbound
 import netty.outbounds.GalaxyOutbound
+import netty.outbounds.OutBounds
+import netty.stream.StreamFactory
 import java.util.*
 
 class Socks5InitialRequestInboundHandler() : SimpleChannelInboundHandler<DefaultSocks5InitialRequest>(), NoCoLogging {
@@ -54,13 +56,22 @@ class Socks5CommandRequestInboundHandler(private val clientWorkGroup: EventLoopG
         resolveOutbound.ifPresent {
             when (it.protocol) {
                 "galaxy" -> GalaxyOutbound.galaxyOutbound.outbound(ctx, msg, socks5AddressType, clientWorkGroup)
-                else -> {
+                "trojan" -> {
+                    val stream = StreamFactory.getStream(it.streamBy)
+                    OutBounds.outbound(ctx.channel(), msg, socks5AddressType, clientWorkGroup, stream, it.trojanSetting)
+                }
 
+                else -> {
+                    logger.error("id: ${ctx.channel().id().asShortText()}, protocol=${it.protocol} not support")
                 }
             }
         }
 
 
+    }
+
+    override fun exceptionCaught(ctx: ChannelHandlerContext?, cause: Throwable?) {
+        logger.error("id: ${ctx?.channel()?.id()?.asShortText()}, exceptionCaught: $cause")
     }
 
     private fun resolveOutbound(inbound: Inbound): Optional<Outbound> {

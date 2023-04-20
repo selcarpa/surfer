@@ -10,7 +10,8 @@ data class Auth(val password: String, val user: String)
 data class Outbound(val protocol: String, val trojanSetting: TrojanSetting?, val streamBy: StreamBy)
 data class StreamBy(val type: String, val wsSettings: List<WsSetting>)
 data class WsSetting(val path: String, val port: Int, val host: String)
-data class TrojanSetting(val password: String)
+data class TrojanSetting(val password: String):ProxyProtocolSetting()
+open class ProxyProtocolSetting()
 
 class ConfigurationHolder private constructor() {
     companion object {

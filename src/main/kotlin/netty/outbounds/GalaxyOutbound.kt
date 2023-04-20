@@ -7,6 +7,9 @@ import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.socksx.v5.*
 import netty.inbounds.Socks5CommandRequestInboundHandler
 
+/**
+ * outbound to anywhere
+ */
 class GalaxyOutbound : NoCoLogging {
     companion object {
         val galaxyOutbound: GalaxyOutbound by lazy { GalaxyOutbound() }
@@ -33,9 +36,9 @@ class GalaxyOutbound : NoCoLogging {
                 future1.addListener(ChannelFutureListener { future2 ->
                     if (future2.isSuccess) {
                         clientCTX.pipeline().addLast(object : ChannelInboundHandlerAdapter() {
-                            override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-                                logger.debug("id: ${ctx.channel().id().asShortText()}, receive msg: $msg")
-                                future2.channel().writeAndFlush(msg)
+                            override fun channelRead(ctx: ChannelHandlerContext, msg1: Any) {
+                                logger.debug("id: ${ctx.channel().id().asShortText()}, receive msg1: $msg1")
+                                future2.channel().writeAndFlush(msg1)
                             }
                         })
                         val commandResponse =

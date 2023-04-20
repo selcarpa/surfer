@@ -26,13 +26,13 @@
         "wsSettings": [
           {
             "port": 443,
-            "host": "newstart.straw.ml",
-            "path": "/f"
+            "host": "xxksicen.straw.ml",
+            "path": "/whitesnow"
           }
         ]
       },
       "trojanSetting": {
-        "password": "26eb6def-aa89-47cf-8fce-10e014659234"
+        "password": "2c7b855c-a150-4cc7-ba6d-47a54b9979fd"
       }
     }
   ]
