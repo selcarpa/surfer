@@ -5,7 +5,6 @@ import io.netty.bootstrap.Bootstrap
 import io.netty.channel.*
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.socksx.v5.*
-import netty.inbounds.Socks5CommandRequestInboundHandler
 
 /**
  * outbound to anywhere
@@ -44,8 +43,6 @@ class GalaxyOutbound : NoCoLogging {
                         val commandResponse =
                             DefaultSocks5CommandResponse(Socks5CommandStatus.SUCCESS, socks5AddressType)
                         clientCTX.writeAndFlush(commandResponse)
-                        clientCTX.pipeline().remove(Socks5CommandRequestInboundHandler::class.java)
-                        clientCTX.pipeline().remove(Socks5CommandRequestDecoder::class.java)
                     } else {
                         logger.error(
                             "id: ${

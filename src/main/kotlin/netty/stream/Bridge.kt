@@ -7,12 +7,12 @@ import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.Promise
-import netty.inbounds.SocksServerUtils
+import utils.ChannelUtils
 
 /**
  * relay both server and client
  */
-class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandlerAdapter(), NoCoLogging {
+open class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandlerAdapter(), NoCoLogging {
     override fun channelActive(ctx: ChannelHandlerContext) {
         ctx.writeAndFlush(Unpooled.EMPTY_BUFFER)
     }
@@ -32,7 +32,7 @@ class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandlerAda
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
         if (relayChannel.isActive) {
-            SocksServerUtils.closeOnFlush(relayChannel)
+            ChannelUtils.closeOnFlush(relayChannel)
         }
     }
 

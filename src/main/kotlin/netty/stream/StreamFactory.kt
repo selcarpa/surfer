@@ -16,8 +16,9 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.CharsetUtil
-import model.config.StreamBy
-import model.config.WsSetting
+import io.netty.util.concurrent.Promise
+import model.config.OutboundStreamBy
+import model.config.WsOutboundSetting
 import java.net.URI
 import java.util.*
 
@@ -26,17 +27,17 @@ class StreamFactory : NoCoLogging {
 //    val streams:MutableMap<String,MutableList<>>
 
     companion object : NoCoLogging {
-        fun getStream(streamBy: StreamBy): Channel {
-            logger.debug("init stream type: ${streamBy.type}")
-            return when (streamBy.type) {
-                "ws" -> wsStream(streamBy.wsSettings[0])
-                else -> throw IllegalArgumentException("stream type ${streamBy.type} not supported")
+        fun getStream(outboundStreamBy: OutboundStreamBy, connectPromise: Promise<Channel>) {
+            logger.debug("init stream type: ${outboundStreamBy.type}")
+            return when (outboundStreamBy.type) {
+                "ws" -> wsStream(outboundStreamBy.wsOutboundSettings[0], connectPromise)
+                else -> throw IllegalArgumentException("stream type ${outboundStreamBy.type} not supported")
             }
         }
 
-        private fun wsStream(wsSetting: WsSetting): Channel {
+        private fun wsStream(wsOutboundSetting: WsOutboundSetting, connectPromise: Promise<Channel>) {
 
-            val uri = URI("wss://${wsSetting.host}:${wsSetting.port}${wsSetting.path}")
+            val uri = URI("wss://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
             val scheme = if (uri.scheme == null) "ws" else uri.scheme
             val port: Int = if (uri.port == -1) {
                 if ("ws".equals(scheme, ignoreCase = true)) {
@@ -53,20 +54,16 @@ class StreamFactory : NoCoLogging {
 
             val ssl = "wss".equals(scheme, ignoreCase = true)
             val sslCtx: SslContext? = if (ssl) {
-                SslContextBuilder.forClient()
-                    .trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+                SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
             } else {
                 null
             }
             val group: EventLoopGroup = NioEventLoopGroup()
             try {
-
                 val b = Bootstrap()
-                b.group(group)
-                    .channel(NioSocketChannel::class.java)
-                    .handler(WsClientInitializer(sslCtx, wsSetting))
-                val ch: Channel = b.connect(uri.host, port).sync().channel()
-                return ch
+                b.group(group).channel(NioSocketChannel::class.java)
+                    .handler(WsClientInitializer(sslCtx, wsOutboundSetting, connectPromise))
+                b.connect(uri.host, port).sync().channel()
             } finally {
                 group.shutdownGracefully()
             }
@@ -75,15 +72,16 @@ class StreamFactory : NoCoLogging {
 
 }
 
-class WsClientInitializer(private val sslCtx: SslContext?, private val wsSetting: WsSetting) :
-    ChannelInitializer<NioSocketChannel>(), NoCoLogging {
+class WsClientInitializer(
+    private val sslCtx: SslContext?, private val wsOutboundSetting: WsOutboundSetting, private val connectPromise: Promise<Channel>
+) : ChannelInitializer<NioSocketChannel>(), NoCoLogging {
     override fun initChannel(ch: NioSocketChannel) {
 
         val uri: URI = if (sslCtx != null) {
-            ch.pipeline().addLast(sslCtx.newHandler(ch.alloc(), wsSetting.host, wsSetting.port))
-            URI("wss://${wsSetting.host}:${wsSetting.port}${wsSetting.path}")
+            ch.pipeline().addLast(sslCtx.newHandler(ch.alloc(), wsOutboundSetting.host, wsOutboundSetting.port))
+            URI("wss://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
         } else {
-            URI("ws://${wsSetting.host}:${wsSetting.port}${wsSetting.path}")
+            URI("ws://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
         }
 
         logger.debug("init ws client: $uri")
@@ -93,7 +91,7 @@ class WsClientInitializer(private val sslCtx: SslContext?, private val wsSetting
         val webSocketClientHandler = WebSocketClientHandler(
             WebSocketClientHandshakerFactory.newHandshaker(
                 uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-            )
+            ), connectPromise
         )
         ch.pipeline().addLast(
             HttpClientCodec(),
@@ -107,19 +105,13 @@ class WsClientInitializer(private val sslCtx: SslContext?, private val wsSetting
 }
 
 
-class WebSocketClientHandler(private val handshaker: WebSocketClientHandshaker) : SimpleChannelInboundHandler<Any?>(),
-    NoCoLogging {
-    private var handshakeFuture: ChannelPromise? = null
-    fun handshakeFuture(): ChannelFuture? {
-        return handshakeFuture
-    }
-
-    override fun handlerAdded(ctx: ChannelHandlerContext) {
-        handshakeFuture = ctx.newPromise()
-    }
+class WebSocketClientHandler(
+    private val handshaker: WebSocketClientHandshaker, private val connectPromise: Promise<Channel>
+) : SimpleChannelInboundHandler<Any?>(), NoCoLogging {
 
     override fun channelActive(ctx: ChannelHandlerContext) {
-        handshaker.handshake(ctx.channel())
+//        handshaker.handshake(ctx.channel())
+        connectPromise.setSuccess(ctx.channel())
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
@@ -133,22 +125,22 @@ class WebSocketClientHandler(private val handshaker: WebSocketClientHandshaker) 
             try {
                 handshaker.finishHandshake(ch, msg as FullHttpResponse?)
                 logger.debug("WebSocket Client connected!")
-                handshakeFuture!!.setSuccess()
             } catch (e: WebSocketHandshakeException) {
                 logger.debug("WebSocket Client failed to connect")
-                handshakeFuture!!.setFailure(e)
+                connectPromise.setFailure(e)
             }
             return
         }
         if (msg is FullHttpResponse) {
             throw IllegalStateException(
-                "Unexpected FullHttpResponse (getStatus=" + msg.status() +
-                        ", content=" + msg.content().toString(CharsetUtil.UTF_8) + ')'
+                "Unexpected FullHttpResponse (getStatus=" + msg.status() + ", content=" + msg.content()
+                    .toString(CharsetUtil.UTF_8) + ')'
             )
         }
         when (val frame = msg as WebSocketFrame?) {
             is TextWebSocketFrame -> {
                 logger.debug("WebSocket Client received message: " + frame.text())
+                ctx.fireChannelRead(frame)
             }
 
             is PongWebSocketFrame -> {
@@ -162,6 +154,7 @@ class WebSocketClientHandler(private val handshaker: WebSocketClientHandshaker) 
 
             is BinaryWebSocketFrame -> {
                 logger.debug("WebSocket Client received binary:${ByteBufUtil.hexDump(frame.content().array())}")
+                ctx.fireChannelRead(frame)
             }
         }
     }

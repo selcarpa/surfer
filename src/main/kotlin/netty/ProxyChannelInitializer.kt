@@ -1,19 +1,17 @@
 package netty
 
 import io.klogging.NoCoLogging
-import io.netty.channel.ChannelHandlerAdapter
-import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInitializer
-import io.netty.channel.EventLoopGroup
-import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.*
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
 import io.netty.handler.stream.ChunkedWriteHandler
+import io.netty.handler.timeout.IdleStateHandler
 import model.config.ConfigurationHolder
 import model.config.Inbound
 import netty.inbounds.HttpProxyServerHandler
 import netty.inbounds.SocksServerHandler
+import netty.inbounds.WebsocketInbound
 import java.util.function.Function
 import java.util.stream.Collectors
 
@@ -38,6 +36,11 @@ class ProxyChannelInitializer : NoCoLogging, ChannelInitializer<NioSocketChannel
 
                 "socks5", "socks4", "socks4a" -> {
                     initSocksInbound(ch, inbound)
+                    return
+                }
+
+                "trojan" -> {
+                    initTrojanInbound(ch, inbound)
                     return
                 }
             }
@@ -68,5 +71,14 @@ class ProxyChannelInitializer : NoCoLogging, ChannelInitializer<NioSocketChannel
         ch.pipeline().addLast("aggregator", HttpObjectAggregator(10 * 1024 * 1024))
         ch.pipeline().addLast("compressor", HttpContentCompressor())
         ch.pipeline().addLast(HttpServerCodec())
+    }
+
+    private fun initTrojanInbound(ch: NioSocketChannel, inbound: Inbound) {
+        ch.pipeline().addLast(HttpServerCodec())
+        ch.pipeline().addLast(ChunkedWriteHandler())
+        ch.pipeline().addLast(HttpObjectAggregator(65536))
+        ch.pipeline().addLast(IdleStateHandler(60, 60, 60))
+        ch.pipeline().addLast(WebsocketInbound())
+
     }
 }

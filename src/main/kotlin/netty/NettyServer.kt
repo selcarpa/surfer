@@ -27,14 +27,17 @@ class NettyServer : NoCoLogging {
             .childHandler(ProxyChannelInitializer())
             .option(ChannelOption.SO_BACKLOG, 65536)
             .childOption(ChannelOption.SO_KEEPALIVE, true)
-        bootstrap.bind(ConfigurationHolder.configuration.inbounds[0].port).addListener { future: Future<in Void?> ->
-            if (future.isSuccess) {
-                logger.info("server bind success")
-                Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
-            } else {
-                logger.error("server bind fail, reason:{}", future.cause().message)
+        ConfigurationHolder.configuration.inbounds.stream().forEach {
+            bootstrap.bind(it.port).addListener { future: Future<in Void?> ->
+                if (future.isSuccess) {
+                    logger.info("bind ${it.port} success")
+                    Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
+                } else {
+                    logger.error("bind ${it.port} fail, reason:{}", future.cause().message)
+                }
             }
         }
+
     }
 
     /**
