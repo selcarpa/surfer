@@ -20,22 +20,31 @@ import io.netty.util.concurrent.Promise
 import model.config.OutboundStreamBy
 import model.config.WsOutboundSetting
 import java.net.URI
-import java.util.*
 
 
 class StreamFactory : NoCoLogging {
 //    val streams:MutableMap<String,MutableList<>>
 
     companion object : NoCoLogging {
-        fun getStream(outboundStreamBy: OutboundStreamBy, connectPromise: Promise<Channel>) {
-            logger.debug("init stream type: ${outboundStreamBy.type}")
+        fun getStream(
+            outboundStreamBy: OutboundStreamBy,
+            connectPromise: Promise<Channel>,
+            b: Bootstrap,
+            eventLoop: EventLoop
+        ) {
+//            logger.debug("init stream type: ${outboundStreamBy.type}")
             return when (outboundStreamBy.type) {
-                "ws" -> wsStream(outboundStreamBy.wsOutboundSettings[0], connectPromise)
+                "ws" -> wsStream(outboundStreamBy.wsOutboundSettings[0], connectPromise, b, eventLoop)
                 else -> throw IllegalArgumentException("stream type ${outboundStreamBy.type} not supported")
             }
         }
 
-        private fun wsStream(wsOutboundSetting: WsOutboundSetting, connectPromise: Promise<Channel>) {
+        private fun wsStream(
+            wsOutboundSetting: WsOutboundSetting,
+            connectPromise: Promise<Channel>,
+            b: Bootstrap,
+            eventLoop: EventLoop
+        ) {
 
             val uri = URI("wss://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
             val scheme = if (uri.scheme == null) "ws" else uri.scheme
@@ -58,22 +67,18 @@ class StreamFactory : NoCoLogging {
             } else {
                 null
             }
-            val group: EventLoopGroup = NioEventLoopGroup()
-            try {
-                val b = Bootstrap()
-                b.group(group).channel(NioSocketChannel::class.java)
-                    .handler(WsClientInitializer(sslCtx, wsOutboundSetting, connectPromise))
-                b.connect(uri.host, port).sync().channel()
-            } finally {
-                group.shutdownGracefully()
-            }
+            b.group(eventLoop).channel(NioSocketChannel::class.java)
+                .handler(WsClientInitializer(sslCtx, wsOutboundSetting, connectPromise))
+            b.connect(uri.host, port)
         }
     }
 
 }
 
 class WsClientInitializer(
-    private val sslCtx: SslContext?, private val wsOutboundSetting: WsOutboundSetting, private val connectPromise: Promise<Channel>
+    private val sslCtx: SslContext?,
+    private val wsOutboundSetting: WsOutboundSetting,
+    private val connectPromise: Promise<Channel>
 ) : ChannelInitializer<NioSocketChannel>(), NoCoLogging {
     override fun initChannel(ch: NioSocketChannel) {
 
@@ -84,7 +89,7 @@ class WsClientInitializer(
             URI("ws://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
         }
 
-        logger.debug("init ws client: $uri")
+//        logger.debug("init ws client: $uri")
         // Connect with V13 (RFC 6455 aka HyBi-17). You can change it to V08 or V00.
         // If you change it to V00, ping is not supported and remember to change
         // HttpResponseDecoder to WebSocketHttpResponseDecoder in the pipeline.
@@ -110,15 +115,17 @@ class WebSocketClientHandler(
 ) : SimpleChannelInboundHandler<Any?>(), NoCoLogging {
 
     override fun channelActive(ctx: ChannelHandlerContext) {
-//        handshaker.handshake(ctx.channel())
-        connectPromise.setSuccess(ctx.channel())
+        logger.debug("WebSocket Client active!")
+        handshaker.handshake(ctx.channel()).addListener {
+            logger.debug("WebSocket Client handshake success!")
+            connectPromise.setSuccess(ctx.channel())
+        }
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
-        logger.debug("WebSocket Client disconnected!")
+        logger.debug("WebSocket Client inactive!")
     }
 
-    @Throws(Exception::class)
     public override fun channelRead0(ctx: ChannelHandlerContext, msg: Any?) {
         val ch = ctx.channel()
         if (!handshaker.isHandshakeComplete) {

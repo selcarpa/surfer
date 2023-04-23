@@ -5,7 +5,9 @@ import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
-import io.netty.handler.codec.MessageToByteEncoder
+import io.netty.channel.ChannelOutboundHandlerAdapter
+import io.netty.channel.ChannelPromise
+import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame
 import io.netty.util.ReferenceCountUtil
 import model.config.TrojanSetting
 import model.protocol.TrojanPackage
@@ -13,34 +15,49 @@ import model.protocol.TrojanRequest
 import netty.stream.RelayHandler
 import utils.BigEndianUtils
 import utils.Sha224Utils
-import kotlin.math.log
 
-class TrojanEncoder : MessageToByteEncoder<TrojanPackage>(), NoCoLogging {
-    override fun encode(ctx: ChannelHandlerContext?, msg: TrojanPackage, out: ByteBuf) {
-        out.writeBytes(ByteBufUtil.decodeHexDump(msg.hexSha224Password))
-        out.writeBytes(ByteBufUtil.decodeHexDump("0d0a"))
-        out.writeBytes(msg.request.cmd.byteValue())
-        out.writeBytes(msg.request.atyp.byteValue())
-        out.writeBytes(msg.request.host.toByteArray())
-        out.writeBytes(BigEndianUtils.int2ByteArrayTrimZero(msg.request.port, 2))
+class TrojanOutbound : ChannelOutboundHandlerAdapter(), NoCoLogging {
+
+    override fun write(ctx: ChannelHandlerContext, msg: Any?, promise: ChannelPromise?) {
+        when (msg) {
+            is TrojanPackage -> {
+                logger.debug("TrojanEncoder encode message:${msg.javaClass.name}")
+                val h1 = ByteBufUtil.decodeHexDump(msg.hexSha224Password)
+                val h2 = ByteBufUtil.decodeHexDump("0d0a")
+                val h3 = msg.request.cmd.byteValue()
+                val h4 = msg.request.atyp.byteValue()
+                val h5 = msg.request.host.toByteArray()
+                val h6 = BigEndianUtils.int2ByteArrayTrimZero(msg.request.port, 2)
+                val out = ByteBufUtil.threadLocalDirectBuffer()
+                out.writeBytes(h1)
+                out.writeBytes(h2)
+                out.writeBytes(h3)
+                out.writeBytes(h4)
+                out.writeBytes(h5)
+                out.writeBytes(h6)
+                val binaryWebSocketFrame = BinaryWebSocketFrame(out)
+                ctx.writeAndFlush(binaryWebSocketFrame)
+            }
+
+            else -> {
+                ctx.writeAndFlush(msg)
+            }
+        }
     }
 }
 
 private fun ByteBuf.writeBytes(byteValue: Byte) {
-    //convert to a array
     val bytes = ByteArray(1)
     bytes[0] = byteValue
     this.writeBytes(bytes)
 }
 
 class TrojanRelayHandler(
-    relayChannel: Channel,
+    private val relayChannel: Channel,
     private val trojanSetting: TrojanSetting,
     private val trojanRequest: TrojanRequest
-) :
-    RelayHandler(relayChannel), NoCoLogging {
+) : RelayHandler(relayChannel), NoCoLogging {
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        logger.debug("TrojanRelayHandler receive message:${msg.javaClass.name}")
         when (msg) {
             is ByteBuf -> {
                 val currentAllBytes = ByteArray(msg.readableBytes())
@@ -51,7 +68,15 @@ class TrojanRelayHandler(
                     trojanRequest,
                     ByteBufUtil.hexDump(currentAllBytes)
                 )
-                super.channelRead(ctx, trojanPackage)
+                if (relayChannel.isActive) {
+                    logger.debug(
+                        "${ctx.channel().id().asShortText()} pipeline handlers:${
+                            ctx.pipeline().names()
+                        }, write message:${msg.javaClass.name}"
+                    )
+                    relayChannel.writeAndFlush(trojanPackage)
+                    logger.debug("relayChannel handlers: ${relayChannel.pipeline().names()}")
+                }
             }
 
             else -> {

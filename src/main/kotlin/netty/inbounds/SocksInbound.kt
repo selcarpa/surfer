@@ -15,6 +15,7 @@ import io.netty.util.concurrent.Future
 import io.netty.util.concurrent.FutureListener
 import model.config.Inbound
 import model.protocol.TrojanRequest
+import netty.outbounds.TrojanOutbound
 import netty.outbounds.TrojanRelayHandler
 import netty.stream.PromiseHandler
 import netty.stream.RelayHandler
@@ -144,63 +145,14 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
         originCTX: ChannelHandlerContext,
         message: Socks5CommandRequest
     ) {
-        /*        val promise = originCTX.executor().newPromise<Channel>()
-                promise.addListener(object : FutureListener<Channel?> {
-                    override fun operationComplete(future: Future<Channel?>) {
-                        val outboundChannel = future.now!!
-                        if (future.isSuccess) {
-                            val responseFuture = originCTX.channel().writeAndFlush(
-                                DefaultSocks5CommandResponse(
-                                    Socks5CommandStatus.SUCCESS,
-                                    message.dstAddrType(),
-                                    message.dstAddr(),
-                                    message.dstPort()
-                                )
-                            )
-                            responseFuture.addListener(object : ChannelFutureListener {
-                                override fun operationComplete(channelFuture: ChannelFuture) {
-                                    originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                                    outboundChannel.pipeline().addLast(RelayHandler(originCTX.channel()))
-                                    originCTX.pipeline().addLast(RelayHandler(outboundChannel))
-                                }
-                            })
-                        } else {
-                            originCTX.channel().writeAndFlush(
-                                DefaultSocks5CommandResponse(
-                                    Socks5CommandStatus.FAILURE, message.dstAddrType()
-                                )
-                            )
-                            ChannelUtils.closeOnFlush(originCTX.channel())
-                        }
-                    }
-                })
-                b.group(originCTX.channel().eventLoop()).channel(NioSocketChannel::class.java)
-                    .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000).option(ChannelOption.SO_KEEPALIVE, true)
-                    .handler(PromiseHandler(promise))
-                b.connect(message.dstAddr(), message.dstPort()).addListener(object : ChannelFutureListener {
-                    override fun operationComplete(future: ChannelFuture) {
-                        if (future.isSuccess) {
-                            // Connection established use handler provided results
-                        } else {
-                            // Close the connection if the connection attempt has failed.
-                            originCTX.channel().writeAndFlush(
-                                DefaultSocks5CommandResponse(Socks5CommandStatus.FAILURE, message.dstAddrType())
-                            )
-                            logger.debug("ctx1 pipeline handlers:${originCTX.pipeline().names()}")
-                            ChannelUtils.closeOnFlush(originCTX.channel())
-                        }
-                    }
-                })*/
-
         val resolveOutbound = resolveOutbound(inbound)
         resolveOutbound.ifPresent { outbound ->
             when (outbound.protocol) {
                 "galaxy" -> {}
                 "trojan" -> {
                     val connectPromise = originCTX.executor().newPromise<Channel>()
-                    connectPromise.addListener {
-                        FutureListener<Channel?> { future ->
-                            logger.debug("ctx1 pipeline handlers:${originCTX.pipeline().names()}")
+                    connectPromise.addListener(object : FutureListener<Channel?> {
+                        override fun operationComplete(future: Future<Channel?>) {
                             val outboundChannel = future.now!!
                             if (future.isSuccess) {
                                 val responseFuture = originCTX.channel().writeAndFlush(
@@ -213,20 +165,22 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                                 )
                                 responseFuture.addListener(object : ChannelFutureListener {
                                     override fun operationComplete(channelFuture: ChannelFuture) {
-                                        originCTX.pipeline().remove(this@SocksServerConnectHandler)
+//                                        originCTX.pipeline().remove(this@SocksServerConnectHandler)
                                         outboundChannel.pipeline()
-                                            .addLast(
-                                                TrojanRelayHandler(
-                                                    originCTX.channel(), outbound.trojanSetting!!,
-                                                    TrojanRequest(
-                                                        Socks5CommandType.CONNECT,
-                                                        message.dstAddrType(),
-                                                        message.dstAddr(),
-                                                        message.dstPort()
-                                                    )
-                                                )
+                                            .addFirst(
+                                                RelayHandler(originCTX.channel()), TrojanOutbound()
                                             )
-                                        originCTX.pipeline().addLast(RelayHandler(outboundChannel))
+                                        originCTX.pipeline().addLast(
+                                            TrojanRelayHandler(
+                                                outboundChannel, outbound.trojanSetting!!,
+                                                TrojanRequest(
+                                                    Socks5CommandType.CONNECT,
+                                                    message.dstAddrType(),
+                                                    message.dstAddr(),
+                                                    message.dstPort()
+                                                )
+                                            ),
+                                        )
                                     }
                                 })
                             } else {
@@ -240,7 +194,13 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                             }
                         }
                     }
-                    StreamFactory.getStream(outbound.outboundStreamBy, connectPromise)
+                    )
+                    StreamFactory.getStream(
+                        outbound.outboundStreamBy,
+                        connectPromise,
+                        b,
+                        originCTX.channel().eventLoop()
+                    )
                 }
 
                 else -> {
@@ -301,6 +261,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+        logger.error(cause)
         ChannelUtils.closeOnFlush(ctx.channel())
     }
 }

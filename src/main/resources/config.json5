@@ -1,15 +1,15 @@
 {
   "inbounds": [
-//    {
-//      "port": 14270,
-//      "protocol": "socks5",
-//      "socks5Setting": {
-//        //        "auth": {
-//        //          "password": "1",
-//        //          "username": "1"
-//        //        }
-//      }
-//    },
+    {
+      "port": 14270,
+      "protocol": "socks5",
+      "socks5Setting": {
+        //        "auth": {
+        //          "password": "1",
+        //          "username": "1"
+        //        }
+      }
+    },
     {
       "protocol": "trojan",
       "port": 14271,

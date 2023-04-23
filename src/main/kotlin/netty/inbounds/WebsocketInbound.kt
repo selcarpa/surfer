@@ -1,6 +1,7 @@
 package netty.inbounds
 
 import io.klogging.NoCoLogging
+import io.netty.buffer.ByteBufUtil
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.handler.codec.http.FullHttpRequest
@@ -15,7 +16,10 @@ class WebsocketInbound() : ChannelInboundHandlerAdapter(), NoCoLogging {
         logger.debug("WebsocketInbound receive message:${msg.javaClass.name}")
         when (msg) {
             is FullHttpRequest -> {
-                ctx.fireChannelRead(msg)
+                val wsFactory = WebSocketServerHandshakerFactory("0.0.0.0:14271", null, false)
+                val handshaker = wsFactory.newHandshaker(msg)
+                handshaker.handshake(ctx.channel(), msg)
+
             }
 
             is CloseWebSocketFrame -> {
@@ -35,6 +39,11 @@ class WebsocketInbound() : ChannelInboundHandlerAdapter(), NoCoLogging {
             }
 
             is BinaryWebSocketFrame -> {
+                val currentAllBytes = ByteArray(msg.content().readableBytes())
+                msg.content().readBytes(currentAllBytes)
+                logger.debug(
+                    "WebsocketInbound receive message:${msg.javaClass.name} ${ByteBufUtil.hexDump(currentAllBytes)}"
+                )
                 ctx.fireChannelRead(msg)
             }
 

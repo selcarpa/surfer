@@ -26,6 +26,7 @@ open class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandl
             )
             relayChannel.writeAndFlush(msg)
         } else {
+            logger.error("relay channel is not active, close message:${msg.javaClass.name}")
             ReferenceCountUtil.release(msg)
         }
     }
