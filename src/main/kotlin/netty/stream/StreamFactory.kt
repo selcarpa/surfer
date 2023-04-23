@@ -115,9 +115,7 @@ class WebSocketClientHandler(
 ) : SimpleChannelInboundHandler<Any?>(), NoCoLogging {
 
     override fun channelActive(ctx: ChannelHandlerContext) {
-        logger.debug("WebSocket Client active!")
         handshaker.handshake(ctx.channel()).addListener {
-            logger.debug("WebSocket Client handshake success!")
             connectPromise.setSuccess(ctx.channel())
         }
     }
@@ -131,7 +129,7 @@ class WebSocketClientHandler(
         if (!handshaker.isHandshakeComplete) {
             try {
                 handshaker.finishHandshake(ch, msg as FullHttpResponse?)
-                logger.debug("WebSocket Client connected!")
+                logger.debug("${ctx.channel().id().asShortText()} WebSocket Client connected!")
             } catch (e: WebSocketHandshakeException) {
                 logger.debug("WebSocket Client failed to connect")
                 connectPromise.setFailure(e)

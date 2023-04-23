@@ -20,8 +20,8 @@ open class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandl
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (relayChannel.isActive) {
             logger.debug(
-                "${ctx.channel().id().asShortText()} pipeline handlers:${
-                    ctx.pipeline().names()
+                "${relayChannel.id().asShortText()} pipeline handlers:${
+                    relayChannel.pipeline().names()
                 }, write message:${msg.javaClass.name}"
             )
             relayChannel.writeAndFlush(msg)

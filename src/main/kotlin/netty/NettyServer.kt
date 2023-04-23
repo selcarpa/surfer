@@ -28,7 +28,7 @@ class NettyServer : NoCoLogging {
             .option(ChannelOption.SO_BACKLOG, 65536)
             .childOption(ChannelOption.SO_KEEPALIVE, true)
         ConfigurationHolder.configuration.inbounds.stream().forEach {
-            bootstrap.bind(it.port).addListener { future: Future<in Void?> ->
+            bootstrap.bind(it.port).addListener { future ->
                 if (future.isSuccess) {
                     logger.info("bind ${it.port} success")
                     Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))

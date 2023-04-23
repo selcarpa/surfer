@@ -1,7 +1,7 @@
 {
   "inbounds": [
     {
-      "port": 14270,
+      "port": 14273,
       "protocol": "socks5",
       "socks5Setting": {
         //        "auth": {
@@ -12,7 +12,7 @@
     },
     {
       "protocol": "trojan",
-      "port": 14272,
+      "port": 14271,
       "inboundStreamBy": {
         "type": "ws",
         "wsInboundSettings": [

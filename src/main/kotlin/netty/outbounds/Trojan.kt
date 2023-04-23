@@ -21,7 +21,6 @@ class TrojanOutbound : ChannelOutboundHandlerAdapter(), NoCoLogging {
     override fun write(ctx: ChannelHandlerContext, msg: Any?, promise: ChannelPromise?) {
         when (msg) {
             is TrojanPackage -> {
-                logger.debug("TrojanEncoder encode message:${msg.javaClass.name}")
                 val h1 = ByteBufUtil.decodeHexDump(msg.hexSha224Password)
                 val h2 = ByteBufUtil.decodeHexDump("0d0a")
                 val h3 = msg.request.cmd.byteValue()
@@ -36,7 +35,7 @@ class TrojanOutbound : ChannelOutboundHandlerAdapter(), NoCoLogging {
                 out.writeBytes(h5)
                 out.writeBytes(h6)
                 val binaryWebSocketFrame = BinaryWebSocketFrame(out)
-                ctx.writeAndFlush(binaryWebSocketFrame)
+                ctx.write(binaryWebSocketFrame, promise)
             }
 
             else -> {
@@ -53,7 +52,7 @@ private fun ByteBuf.writeBytes(byteValue: Byte) {
 }
 
 class TrojanRelayHandler(
-    private val relayChannel: Channel,
+    relayChannel: Channel,
     private val trojanSetting: TrojanSetting,
     private val trojanRequest: TrojanRequest
 ) : RelayHandler(relayChannel), NoCoLogging {
@@ -68,15 +67,7 @@ class TrojanRelayHandler(
                     trojanRequest,
                     ByteBufUtil.hexDump(currentAllBytes)
                 )
-                if (relayChannel.isActive) {
-                    logger.debug(
-                        "${ctx.channel().id().asShortText()} pipeline handlers:${
-                            ctx.pipeline().names()
-                        }, write message:${msg.javaClass.name}"
-                    )
-                    relayChannel.writeAndFlush(trojanPackage)
-                    logger.debug("relayChannel handlers: ${relayChannel.pipeline().names()}")
-                }
+                super.channelRead(ctx, trojanPackage)
             }
 
             else -> {

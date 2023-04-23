@@ -167,7 +167,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                                     override fun operationComplete(channelFuture: ChannelFuture) {
 //                                        originCTX.pipeline().remove(this@SocksServerConnectHandler)
                                         outboundChannel.pipeline()
-                                            .addFirst(
+                                            .addLast(
                                                 RelayHandler(originCTX.channel()), TrojanOutbound()
                                             )
                                         originCTX.pipeline().addLast(
