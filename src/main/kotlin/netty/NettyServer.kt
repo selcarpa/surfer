@@ -11,6 +11,7 @@ import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.util.concurrent.Future
 import model.config.ConfigurationHolder
+import kotlin.system.exitProcess
 
 /**
  * netty服务端配置
@@ -34,6 +35,7 @@ class NettyServer : NoCoLogging {
                     Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
                 } else {
                     logger.error("bind ${it.port} fail, reason:{}", future.cause().message)
+                    exitProcess(1)
                 }
             }
         }

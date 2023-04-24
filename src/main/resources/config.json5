@@ -30,7 +30,7 @@
     {
       "protocol": "trojan",
       "outboundStreamBy": {
-        "type": "ws",
+        "type": "wss",
         "wsOutboundSettings": [
           {
             "port": 443,

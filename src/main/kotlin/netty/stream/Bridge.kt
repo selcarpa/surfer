@@ -24,7 +24,12 @@ open class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandl
                     relayChannel.pipeline().names()
                 }, write message:${msg.javaClass.name}"
             )
-            relayChannel.writeAndFlush(msg)
+            relayChannel.writeAndFlush(msg).addListener {
+                if (!it.isSuccess) {
+                    logger.error("write message:${msg.javaClass.name} to ${relayChannel.id().asShortText()} failed", it.cause())
+                    logger.error(it.cause())
+                }
+            }
         } else {
             logger.error("relay channel is not active, close message:${msg.javaClass.name}")
             ReferenceCountUtil.release(msg)

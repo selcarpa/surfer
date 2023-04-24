@@ -13,13 +13,13 @@ class WebsocketInbound() : ChannelInboundHandlerAdapter(), NoCoLogging {
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
 
-        logger.debug("WebsocketInbound receive message:${msg.javaClass.name}")
         when (msg) {
             is FullHttpRequest -> {
                 val wsFactory = WebSocketServerHandshakerFactory("0.0.0.0:14271", null, false)
                 val handshaker = wsFactory.newHandshaker(msg)
-                handshaker.handshake(ctx.channel(), msg)
-
+                handshaker.handshake(ctx.channel(), msg).addListener {
+                    logger.debug("${ctx.channel().id().asShortText()} WebsocketInbound handshake success")
+                }
             }
 
             is CloseWebSocketFrame -> {

@@ -3,6 +3,7 @@ package netty.outbounds
 import io.klogging.NoCoLogging
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
+import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelOutboundHandlerAdapter
@@ -27,7 +28,7 @@ class TrojanOutbound : ChannelOutboundHandlerAdapter(), NoCoLogging {
                 val h4 = msg.request.atyp.byteValue()
                 val h5 = msg.request.host.toByteArray()
                 val h6 = BigEndianUtils.int2ByteArrayTrimZero(msg.request.port, 2)
-                val out = ByteBufUtil.threadLocalDirectBuffer()
+                val out = Unpooled.buffer()
                 out.writeBytes(h1)
                 out.writeBytes(h2)
                 out.writeBytes(h3)
@@ -35,11 +36,26 @@ class TrojanOutbound : ChannelOutboundHandlerAdapter(), NoCoLogging {
                 out.writeBytes(h5)
                 out.writeBytes(h6)
                 val binaryWebSocketFrame = BinaryWebSocketFrame(out)
-                ctx.write(binaryWebSocketFrame, promise)
+                logger.info(
+                    "${ctx.channel().id().asShortText()} pipeline handlers: ${
+                        ctx.channel().pipeline().names()
+                    } write message:${binaryWebSocketFrame.javaClass.name}"
+                )
+                ctx.write(binaryWebSocketFrame).addListener {
+                    if (!it.isSuccess) {
+                        logger.error(
+                            "write message:${msg.javaClass.name} to ${
+                                ctx.channel().id().asShortText()
+                            } failed", it.cause()
+                        )
+                        logger.error("${ctx.channel().id().asShortText()} ${ctx.channel().pipeline().names()}")
+                        logger.error(it.cause())
+                    }
+                }
             }
 
             else -> {
-                ctx.writeAndFlush(msg)
+                super.write(ctx, msg, promise)
             }
         }
     }
@@ -52,9 +68,7 @@ private fun ByteBuf.writeBytes(byteValue: Byte) {
 }
 
 class TrojanRelayHandler(
-    relayChannel: Channel,
-    private val trojanSetting: TrojanSetting,
-    private val trojanRequest: TrojanRequest
+    relayChannel: Channel, private val trojanSetting: TrojanSetting, private val trojanRequest: TrojanRequest
 ) : RelayHandler(relayChannel), NoCoLogging {
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         when (msg) {

@@ -142,9 +142,9 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
      * socks5 command
      */
     private fun socks5Command(
-        originCTX: ChannelHandlerContext,
-        message: Socks5CommandRequest
+        originCTX: ChannelHandlerContext, message: Socks5CommandRequest
     ) {
+        logger.debug("originCTX: ${originCTX.channel().id().asShortText()}, message: $message")
         val resolveOutbound = resolveOutbound(inbound)
         resolveOutbound.ifPresent { outbound ->
             when (outbound.protocol) {
@@ -166,14 +166,12 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                                 responseFuture.addListener(object : ChannelFutureListener {
                                     override fun operationComplete(channelFuture: ChannelFuture) {
 //                                        originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                                        outboundChannel.pipeline()
-                                            .addLast(
-                                                RelayHandler(originCTX.channel()), TrojanOutbound()
-                                            )
+                                        outboundChannel.pipeline().addLast(
+                                            RelayHandler(originCTX.channel()), TrojanOutbound()
+                                        )
                                         originCTX.pipeline().addLast(
                                             TrojanRelayHandler(
-                                                outboundChannel, outbound.trojanSetting!!,
-                                                TrojanRequest(
+                                                outboundChannel, outbound.trojanSetting!!, TrojanRequest(
                                                     Socks5CommandType.CONNECT,
                                                     message.dstAddrType(),
                                                     message.dstAddr(),
@@ -193,13 +191,9 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                                 ChannelUtils.closeOnFlush(originCTX.channel())
                             }
                         }
-                    }
-                    )
+                    })
                     StreamFactory.getStream(
-                        outbound.outboundStreamBy,
-                        connectPromise,
-                        b,
-                        originCTX.channel().eventLoop()
+                        outbound.outboundStreamBy, connectPromise, b, originCTX.channel().eventLoop()
                     )
                 }
 

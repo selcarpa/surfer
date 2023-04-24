@@ -4,7 +4,6 @@ import io.klogging.NoCoLogging
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.ByteBufUtil
 import io.netty.channel.*
-import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.DefaultHttpHeaders
 import io.netty.handler.codec.http.FullHttpResponse
@@ -34,7 +33,14 @@ class StreamFactory : NoCoLogging {
         ) {
 //            logger.debug("init stream type: ${outboundStreamBy.type}")
             return when (outboundStreamBy.type) {
-                "ws" -> wsStream(outboundStreamBy.wsOutboundSettings[0], connectPromise, b, eventLoop)
+                "ws","wss" -> wsStream(
+                    outboundStreamBy.wsOutboundSettings[0],
+                    connectPromise,
+                    b,
+                    eventLoop,
+                    outboundStreamBy.type
+                )
+
                 else -> throw IllegalArgumentException("stream type ${outboundStreamBy.type} not supported")
             }
         }
@@ -43,10 +49,11 @@ class StreamFactory : NoCoLogging {
             wsOutboundSetting: WsOutboundSetting,
             connectPromise: Promise<Channel>,
             b: Bootstrap,
-            eventLoop: EventLoop
+            eventLoop: EventLoop,
+            type: String
         ) {
 
-            val uri = URI("wss://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
+            val uri = URI("${type}://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
             val scheme = if (uri.scheme == null) "ws" else uri.scheme
             val port: Int = if (uri.port == -1) {
                 if ("ws".equals(scheme, ignoreCase = true)) {
@@ -121,7 +128,7 @@ class WebSocketClientHandler(
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
-        logger.debug("WebSocket Client inactive!")
+        logger.debug("${ctx.channel().id().asShortText()} WebSocket Client inactive!")
     }
 
     public override fun channelRead0(ctx: ChannelHandlerContext, msg: Any?) {
