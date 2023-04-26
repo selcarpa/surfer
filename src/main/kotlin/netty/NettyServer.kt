@@ -1,6 +1,6 @@
 package netty
 
-import io.klogging.NoCoLogging
+
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.buffer.PooledByteBufAllocator
 import io.netty.channel.ChannelOption
@@ -11,12 +11,16 @@ import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.util.concurrent.Future
 import model.config.ConfigurationHolder
+import mu.KotlinLogging
 import kotlin.system.exitProcess
 
 /**
  * netty服务端配置
  */
-class NettyServer : NoCoLogging {
+class NettyServer  {
+    companion object{
+        private val logger = KotlinLogging.logger {}
+    }
     private val bossGroup: EventLoopGroup = NioEventLoopGroup()
     private val workerGroup: EventLoopGroup = NioEventLoopGroup()
     fun start() {

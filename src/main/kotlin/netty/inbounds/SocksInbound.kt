@@ -1,6 +1,6 @@
 package netty.inbounds
 
-import io.klogging.NoCoLogging
+
 import io.netty.channel.*
 import io.netty.channel.ChannelHandler.Sharable
 import io.netty.channel.socket.nio.NioSocketChannel
@@ -15,6 +15,7 @@ import io.netty.util.concurrent.Future
 import io.netty.util.concurrent.FutureListener
 import model.config.Inbound
 import model.protocol.TrojanRequest
+import mu.KotlinLogging
 import netty.outbounds.TrojanOutbound
 import netty.outbounds.TrojanRelayHandler
 import netty.stream.PromiseHandler
@@ -25,7 +26,10 @@ import utils.EasyPUtils.resolveOutbound
 import java.lang.Exception
 
 @Sharable
-class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>(), NoCoLogging {
+class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
     public override fun channelRead0(ctx: ChannelHandlerContext, socksRequest: SocksMessage) {
         when (socksRequest.version()!!) {
             SocksVersion.SOCKS4a -> socks4Connect(ctx, socksRequest)
@@ -118,15 +122,17 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, throwable: Throwable) {
-        logger.error(throwable)
+        logger.error(throwable.message,throwable)
         ChannelUtils.closeOnFlush(ctx.channel())
     }
 }
 
 @Sharable
-class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage?>(),
-    NoCoLogging {
+class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage?>() {
     private val b = io.netty.bootstrap.Bootstrap()
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
 
     public override fun channelRead0(originCTX: ChannelHandlerContext, message: SocksMessage?) {
         when (message) {
@@ -255,7 +261,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        logger.error(cause)
+        logger.error(cause.message,cause)
         ChannelUtils.closeOnFlush(ctx.channel())
     }
 }

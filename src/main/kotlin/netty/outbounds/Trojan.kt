@@ -1,6 +1,6 @@
 package netty.outbounds
 
-import io.klogging.NoCoLogging
+
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
 import io.netty.buffer.Unpooled
@@ -13,11 +13,15 @@ import io.netty.util.ReferenceCountUtil
 import model.config.TrojanSetting
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
+import mu.KotlinLogging
 import netty.stream.RelayHandler
 import utils.BigEndianUtils
 import utils.Sha224Utils
 
-class TrojanOutbound : ChannelOutboundHandlerAdapter(), NoCoLogging {
+class TrojanOutbound : ChannelOutboundHandlerAdapter() {
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
 
     override fun write(ctx: ChannelHandlerContext, msg: Any?, promise: ChannelPromise?) {
         when (msg) {
@@ -49,7 +53,7 @@ class TrojanOutbound : ChannelOutboundHandlerAdapter(), NoCoLogging {
                             } failed", it.cause()
                         )
                         logger.error("${ctx.channel().id().asShortText()} ${ctx.channel().pipeline().names()}")
-                        logger.error(it.cause())
+                        logger.error(it.cause()!!.message, it.cause())
                     }
                 }
             }
@@ -69,7 +73,10 @@ private fun ByteBuf.writeBytes(byteValue: Byte) {
 
 class TrojanRelayHandler(
     relayChannel: Channel, private val trojanSetting: TrojanSetting, private val trojanRequest: TrojanRequest
-) : RelayHandler(relayChannel), NoCoLogging {
+) : RelayHandler(relayChannel) {
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         when (msg) {
             is ByteBuf -> {

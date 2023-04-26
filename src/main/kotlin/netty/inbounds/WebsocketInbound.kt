@@ -1,14 +1,18 @@
 package netty.inbounds
 
-import io.klogging.NoCoLogging
+
 import io.netty.buffer.ByteBufUtil
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.websocketx.*
+import mu.KotlinLogging
 import kotlin.math.log
 
-class WebsocketInbound() : ChannelInboundHandlerAdapter(), NoCoLogging {
+class WebsocketInbound() : ChannelInboundHandlerAdapter() {
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
 
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {

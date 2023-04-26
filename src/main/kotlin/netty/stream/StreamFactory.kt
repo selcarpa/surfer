@@ -1,6 +1,6 @@
 package netty.stream
 
-import io.klogging.NoCoLogging
+
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.ByteBufUtil
 import io.netty.channel.*
@@ -18,13 +18,15 @@ import io.netty.util.CharsetUtil
 import io.netty.util.concurrent.Promise
 import model.config.OutboundStreamBy
 import model.config.WsOutboundSetting
+import mu.KotlinLogging
 import java.net.URI
 
 
-class StreamFactory : NoCoLogging {
+class StreamFactory {
 //    val streams:MutableMap<String,MutableList<>>
 
-    companion object : NoCoLogging {
+    companion object {
+        private val logger = KotlinLogging.logger {}
         fun getStream(
             outboundStreamBy: OutboundStreamBy,
             connectPromise: Promise<Channel>,
@@ -33,7 +35,7 @@ class StreamFactory : NoCoLogging {
         ) {
 //            logger.debug("init stream type: ${outboundStreamBy.type}")
             return when (outboundStreamBy.type) {
-                "ws","wss" -> wsStream(
+                "ws", "wss" -> wsStream(
                     outboundStreamBy.wsOutboundSettings[0],
                     connectPromise,
                     b,
@@ -86,7 +88,11 @@ class WsClientInitializer(
     private val sslCtx: SslContext?,
     private val wsOutboundSetting: WsOutboundSetting,
     private val connectPromise: Promise<Channel>
-) : ChannelInitializer<NioSocketChannel>(), NoCoLogging {
+) : ChannelInitializer<NioSocketChannel>() {
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
+
     override fun initChannel(ch: NioSocketChannel) {
 
         val uri: URI = if (sslCtx != null) {
@@ -119,7 +125,10 @@ class WsClientInitializer(
 
 class WebSocketClientHandler(
     private val handshaker: WebSocketClientHandshaker, private val connectPromise: Promise<Channel>
-) : SimpleChannelInboundHandler<Any?>(), NoCoLogging {
+) : SimpleChannelInboundHandler<Any?>() {
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
 
     override fun channelActive(ctx: ChannelHandlerContext) {
         handshaker.handshake(ctx.channel()).addListener {

@@ -1,6 +1,6 @@
 package netty
 
-import io.klogging.NoCoLogging
+
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.*
@@ -9,15 +9,18 @@ import io.netty.handler.stream.ChunkedWriteHandler
 import io.netty.handler.timeout.IdleStateHandler
 import model.config.ConfigurationHolder
 import model.config.Inbound
+import mu.KotlinLogging
 import netty.inbounds.HttpProxyServerHandler
 import netty.inbounds.SocksServerHandler
 import netty.inbounds.WebsocketInbound
 import java.util.function.Function
 import java.util.stream.Collectors
 
-class ProxyChannelInitializer : NoCoLogging, ChannelInitializer<NioSocketChannel>() {
+class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
-
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
     override fun initChannel(ch: NioSocketChannel) {
 
         val localAddress = ch.localAddress()

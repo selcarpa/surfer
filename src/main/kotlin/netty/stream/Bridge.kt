@@ -1,18 +1,23 @@
 package netty.stream
 
-import io.klogging.NoCoLogging
+
 import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.Promise
+import mu.KotlinLogging
 import utils.ChannelUtils
 
 /**
  * relay both server and client
  */
-open class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandlerAdapter(), NoCoLogging {
+open class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandlerAdapter() {
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
+
     override fun channelActive(ctx: ChannelHandlerContext) {
         ctx.writeAndFlush(Unpooled.EMPTY_BUFFER)
     }
@@ -26,8 +31,11 @@ open class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandl
             )
             relayChannel.writeAndFlush(msg).addListener {
                 if (!it.isSuccess) {
-                    logger.error("write message:${msg.javaClass.name} to ${relayChannel.id().asShortText()} failed", it.cause())
-                    logger.error(it.cause())
+                    logger.error(
+                        "write message:${msg.javaClass.name} to ${relayChannel.id().asShortText()} failed",
+                        it.cause()
+                    )
+                    logger.error(it.cause().message, it.cause())
                 }
             }
         } else {
@@ -44,7 +52,7 @@ open class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandl
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        logger.error(cause)
+        logger.error(cause.message, cause)
         ctx.close()
     }
 }

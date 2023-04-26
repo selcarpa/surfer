@@ -1,17 +1,20 @@
 package netty.outbounds
 
-import io.klogging.NoCoLogging
+
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel.*
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.socksx.v5.*
+import mu.KotlinLogging
 
 /**
  * outbound to anywhere
  */
-class GalaxyOutbound : NoCoLogging {
+class GalaxyOutbound {
     companion object {
         val galaxyOutbound: GalaxyOutbound by lazy { GalaxyOutbound() }
+        private val logger = KotlinLogging.logger {}
+
     }
 
     fun outbound(

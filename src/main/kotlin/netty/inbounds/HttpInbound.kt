@@ -1,6 +1,6 @@
 package netty.inbounds
 
-import io.klogging.NoCoLogging
+
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.ChannelHandlerContext
@@ -9,13 +9,17 @@ import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.*
 import io.netty.util.ReferenceCountUtil
+import mu.KotlinLogging
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.util.function.Consumer
 
-class HttpProxyServerHandler : NoCoLogging, ChannelInboundHandlerAdapter() {
+class HttpProxyServerHandler :  ChannelInboundHandlerAdapter() {
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         val http = true
         //http proxy and http connect method

@@ -15,7 +15,11 @@ repositories {
 dependencies {
     implementation("io.netty:netty-all:4.1.90.Final")
     implementation("com.google.code.gson:gson:2.10.1")
-    implementation("io.klogging:klogging-jvm:0.4.13")
+
+    //kotlin-logging
+    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    implementation("ch.qos.logback:logback-classic:1.4.7")
+
     testImplementation(kotlin("test"))
 }
 
