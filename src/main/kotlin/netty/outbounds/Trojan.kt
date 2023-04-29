@@ -14,7 +14,7 @@ import model.config.TrojanSetting
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
-import netty.stream.RelayHandler
+import netty.stream.RelayInboundHandler
 import utils.BigEndianUtils
 import utils.Sha224Utils
 
@@ -39,6 +39,8 @@ class TrojanOutbound : ChannelOutboundHandlerAdapter() {
                 out.writeBytes(h4)
                 out.writeBytes(h5)
                 out.writeBytes(h6)
+                out.writeBytes(h2)
+                out.writeBytes(ByteBufUtil.decodeHexDump(msg.payload))
                 val binaryWebSocketFrame = BinaryWebSocketFrame(out)
                 logger.info(
                     "${ctx.channel().id().asShortText()} pipeline handlers: ${
@@ -50,10 +52,9 @@ class TrojanOutbound : ChannelOutboundHandlerAdapter() {
                         logger.error(
                             "write message:${msg.javaClass.name} to ${
                                 ctx.channel().id().asShortText()
-                            } failed", it.cause()
+                            } failed ${ctx.channel().pipeline().names()}",
+                            it.cause()
                         )
-                        logger.error("${ctx.channel().id().asShortText()} ${ctx.channel().pipeline().names()}")
-                        logger.error(it.cause()!!.message, it.cause())
                     }
                 }
             }
@@ -71,12 +72,13 @@ private fun ByteBuf.writeBytes(byteValue: Byte) {
     this.writeBytes(bytes)
 }
 
-class TrojanRelayHandler(
+class TrojanRelayInboundHandler(
     relayChannel: Channel, private val trojanSetting: TrojanSetting, private val trojanRequest: TrojanRequest
-) : RelayHandler(relayChannel) {
+) : RelayInboundHandler(relayChannel) {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
+
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         when (msg) {
             is ByteBuf -> {
@@ -93,6 +95,7 @@ class TrojanRelayHandler(
 
             else -> {
                 logger.error("TrojanRelayHandler receive unknown message:${msg.javaClass.name}")
+                super.channelRead(ctx, msg)
             }
         }
     }

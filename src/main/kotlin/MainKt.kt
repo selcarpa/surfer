@@ -5,7 +5,7 @@ import netty.NettyServer
 
 private val logger = KotlinLogging.logger {}
 
-object Main {
+object MainKt {
     @JvmStatic
     fun main(args: Array<String>) {
         logger.info("『时间』会带来喜悦。")

@@ -4,6 +4,7 @@ package netty.stream
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.ByteBufUtil
 import io.netty.channel.*
+import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.DefaultHttpHeaders
 import io.netty.handler.codec.http.FullHttpResponse
@@ -28,19 +29,12 @@ class StreamFactory {
     companion object {
         private val logger = KotlinLogging.logger {}
         fun getStream(
-            outboundStreamBy: OutboundStreamBy,
-            connectPromise: Promise<Channel>,
-            b: Bootstrap,
-            eventLoop: EventLoop
+            outboundStreamBy: OutboundStreamBy, connectPromise: Promise<Channel>, b: Bootstrap, eventLoopGroup: EventLoopGroup
         ) {
 //            logger.debug("init stream type: ${outboundStreamBy.type}")
             return when (outboundStreamBy.type) {
                 "ws", "wss" -> wsStream(
-                    outboundStreamBy.wsOutboundSettings[0],
-                    connectPromise,
-                    b,
-                    eventLoop,
-                    outboundStreamBy.type
+                    outboundStreamBy.wsOutboundSettings[0], connectPromise, b, eventLoopGroup, outboundStreamBy.type
                 )
 
                 else -> throw IllegalArgumentException("stream type ${outboundStreamBy.type} not supported")
@@ -51,7 +45,7 @@ class StreamFactory {
             wsOutboundSetting: WsOutboundSetting,
             connectPromise: Promise<Channel>,
             b: Bootstrap,
-            eventLoop: EventLoop,
+            eventLoop: EventLoopGroup,
             type: String
         ) {
 
@@ -76,56 +70,44 @@ class StreamFactory {
             } else {
                 null
             }
+            // Connect with V13 (RFC 6455 aka HyBi-17). You can change it to V08 or V00.
+            // If you change it to V00, ping is not supported and remember to change
+            // HttpResponseDecoder to WebSocketHttpResponseDecoder in the pipeline.
+            val webSocketClientHandler = WebSocketClientHandler(
+                WebSocketClientHandshakerFactory.newHandshaker(
+                    uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
+                ), connectPromise
+            )
             b.group(eventLoop).channel(NioSocketChannel::class.java)
-                .handler(WsClientInitializer(sslCtx, wsOutboundSetting, connectPromise))
+                .handler(object : ChannelInitializer<SocketChannel>() {
+                    override fun initChannel(ch: SocketChannel) {
+                        if (sslCtx != null) {
+                            ch.pipeline()
+                                .addLast(sslCtx.newHandler(ch.alloc(), wsOutboundSetting.host, wsOutboundSetting.port))
+                        }
+                        //        logger.debug("init ws client: $uri")
+
+                        ch.pipeline().addLast(
+                            HttpClientCodec(),
+                            HttpObjectAggregator(8192),
+                            WebSocketClientCompressionHandler.INSTANCE,
+                            webSocketClientHandler
+                        )
+                    }
+
+                })
             b.connect(uri.host, port)
+            webSocketClientHandler.connectPromise!!.sync()
         }
     }
 
 }
-
-class WsClientInitializer(
-    private val sslCtx: SslContext?,
-    private val wsOutboundSetting: WsOutboundSetting,
-    private val connectPromise: Promise<Channel>
-) : ChannelInitializer<NioSocketChannel>() {
-    companion object {
-        private val logger = KotlinLogging.logger {}
-    }
-
-    override fun initChannel(ch: NioSocketChannel) {
-
-        val uri: URI = if (sslCtx != null) {
-            ch.pipeline().addLast(sslCtx.newHandler(ch.alloc(), wsOutboundSetting.host, wsOutboundSetting.port))
-            URI("wss://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
-        } else {
-            URI("ws://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
-        }
-
-//        logger.debug("init ws client: $uri")
-        // Connect with V13 (RFC 6455 aka HyBi-17). You can change it to V08 or V00.
-        // If you change it to V00, ping is not supported and remember to change
-        // HttpResponseDecoder to WebSocketHttpResponseDecoder in the pipeline.
-        val webSocketClientHandler = WebSocketClientHandler(
-            WebSocketClientHandshakerFactory.newHandshaker(
-                uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-            ), connectPromise
-        )
-        ch.pipeline().addLast(
-            HttpClientCodec(),
-            HttpObjectAggregator(8192),
-            WebSocketClientCompressionHandler.INSTANCE,
-            webSocketClientHandler
-        )
-
-    }
-
-}
-
 
 class WebSocketClientHandler(
-    private val handshaker: WebSocketClientHandshaker, private val connectPromise: Promise<Channel>
+    private val handshaker: WebSocketClientHandshaker, val connectPromise: Promise<Channel>
 ) : SimpleChannelInboundHandler<Any?>() {
+    var handshakeFuture: ChannelPromise? = null
+
     companion object {
         private val logger = KotlinLogging.logger {}
     }
@@ -134,6 +116,10 @@ class WebSocketClientHandler(
         handshaker.handshake(ctx.channel()).addListener {
             connectPromise.setSuccess(ctx.channel())
         }
+    }
+
+    override fun handlerAdded(ctx: ChannelHandlerContext?) {
+        handshakeFuture = ctx!!.newPromise()
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {

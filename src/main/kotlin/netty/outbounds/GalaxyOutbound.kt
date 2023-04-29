@@ -28,7 +28,7 @@ class GalaxyOutbound {
             .option(ChannelOption.TCP_NODELAY, true)
             .handler(object : ChannelInboundHandlerAdapter() {
                 override fun channelRead(ctx1: ChannelHandlerContext, msg: Any) {
-                    logger.debug("id: ${ctx1.channel().id().asShortText()}, receive msg: $msg")
+                    logger.debug("id: {}, receive msg: {}", ctx1.channel().id().asShortText(), msg)
                     clientCTX.writeAndFlush(msg)
                 }
             })
@@ -39,7 +39,7 @@ class GalaxyOutbound {
                     if (future2.isSuccess) {
                         clientCTX.pipeline().addLast(object : ChannelInboundHandlerAdapter() {
                             override fun channelRead(ctx: ChannelHandlerContext, msg1: Any) {
-                                logger.debug("id: ${ctx.channel().id().asShortText()}, receive msg1: $msg1")
+                                logger.debug("id: {}, receive msg1: {}", ctx.channel().id().asShortText(), msg1)
                                 future2.channel().writeAndFlush(msg1)
                             }
                         })

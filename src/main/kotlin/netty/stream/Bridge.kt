@@ -13,7 +13,7 @@ import utils.ChannelUtils
 /**
  * relay both server and client
  */
-open class RelayHandler(private val relayChannel: Channel) : ChannelInboundHandlerAdapter() {
+open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInboundHandlerAdapter() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }

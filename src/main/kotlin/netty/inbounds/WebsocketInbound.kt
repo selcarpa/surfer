@@ -7,7 +7,6 @@ import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.websocketx.*
 import mu.KotlinLogging
-import kotlin.math.log
 
 class WebsocketInbound() : ChannelInboundHandlerAdapter() {
     companion object {
@@ -19,6 +18,10 @@ class WebsocketInbound() : ChannelInboundHandlerAdapter() {
 
         when (msg) {
             is FullHttpRequest -> {
+                logger.debug { "WebsocketInbound receive message:${msg.javaClass.name}, headers: " }
+                msg.headers().forEach {
+                    logger.debug { "${it.key}=${it.value}" }
+                }
                 val wsFactory = WebSocketServerHandshakerFactory("0.0.0.0:14271", null, false)
                 val handshaker = wsFactory.newHandshaker(msg)
                 handshaker.handshake(ctx.channel(), msg).addListener {
@@ -39,6 +42,9 @@ class WebsocketInbound() : ChannelInboundHandlerAdapter() {
             }
 
             is TextWebSocketFrame -> {
+                logger.debug(
+                    "WebsocketInbound receive message:${msg.javaClass.name} ${msg.text()}"
+                )
                 ctx.fireChannelRead(msg)
             }
 

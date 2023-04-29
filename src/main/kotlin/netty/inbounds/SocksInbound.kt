@@ -3,6 +3,7 @@ package netty.inbounds
 
 import io.netty.channel.*
 import io.netty.channel.ChannelHandler.Sharable
+import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.socksx.SocksMessage
 import io.netty.handler.codec.socksx.SocksVersion
@@ -17,9 +18,9 @@ import model.config.Inbound
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
 import netty.outbounds.TrojanOutbound
-import netty.outbounds.TrojanRelayHandler
+import netty.outbounds.TrojanRelayInboundHandler
 import netty.stream.PromiseHandler
-import netty.stream.RelayHandler
+import netty.stream.RelayInboundHandler
 import netty.stream.StreamFactory
 import utils.ChannelUtils
 import utils.EasyPUtils.resolveOutbound
@@ -30,6 +31,7 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
     companion object {
         private val logger = KotlinLogging.logger {}
     }
+
     public override fun channelRead0(ctx: ChannelHandlerContext, socksRequest: SocksMessage) {
         when (socksRequest.version()!!) {
             SocksVersion.SOCKS4a -> socks4Connect(ctx, socksRequest)
@@ -122,7 +124,7 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, throwable: Throwable) {
-        logger.error(throwable.message,throwable)
+        logger.error(throwable.message, throwable)
         ChannelUtils.closeOnFlush(ctx.channel())
     }
 }
@@ -130,6 +132,7 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
 @Sharable
 class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage?>() {
     private val b = io.netty.bootstrap.Bootstrap()
+
     companion object {
         private val logger = KotlinLogging.logger {}
     }
@@ -150,13 +153,13 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
     private fun socks5Command(
         originCTX: ChannelHandlerContext, message: Socks5CommandRequest
     ) {
-        logger.debug("originCTX: ${originCTX.channel().id().asShortText()}, message: $message")
         val resolveOutbound = resolveOutbound(inbound)
         resolveOutbound.ifPresent { outbound ->
             when (outbound.protocol) {
                 "galaxy" -> {}
                 "trojan" -> {
-                    val connectPromise = originCTX.executor().newPromise<Channel>()
+                    val eventLoopGroup = NioEventLoopGroup()
+                    val connectPromise = NioEventLoopGroup().next().newPromise<Channel>()
                     connectPromise.addListener(object : FutureListener<Channel?> {
                         override fun operationComplete(future: Future<Channel?>) {
                             val outboundChannel = future.now!!
@@ -173,10 +176,10 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                                     override fun operationComplete(channelFuture: ChannelFuture) {
 //                                        originCTX.pipeline().remove(this@SocksServerConnectHandler)
                                         outboundChannel.pipeline().addLast(
-                                            RelayHandler(originCTX.channel()), TrojanOutbound()
+                                            TrojanOutbound(), RelayInboundHandler(originCTX.channel()),
                                         )
                                         originCTX.pipeline().addLast(
-                                            TrojanRelayHandler(
+                                            TrojanRelayInboundHandler(
                                                 outboundChannel, outbound.trojanSetting!!, TrojanRequest(
                                                     Socks5CommandType.CONNECT,
                                                     message.dstAddrType(),
@@ -199,7 +202,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                         }
                     })
                     StreamFactory.getStream(
-                        outbound.outboundStreamBy, connectPromise, b, originCTX.channel().eventLoop()
+                        outbound.outboundStreamBy, connectPromise, b, eventLoopGroup
                     )
                 }
 
@@ -228,8 +231,8 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                     )
                     responseFuture.addListener(ChannelFutureListener {
                         originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                        outboundChannel?.pipeline()?.addLast(RelayHandler(originCTX.channel()))
-                        originCTX.pipeline().addLast(outboundChannel?.let { it1 -> RelayHandler(it1) })
+                        outboundChannel?.pipeline()?.addLast(RelayInboundHandler(originCTX.channel()))
+                        originCTX.pipeline().addLast(outboundChannel?.let { it1 -> RelayInboundHandler(it1) })
                     })
                 } else {
                     originCTX.channel().writeAndFlush(
@@ -261,7 +264,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        logger.error(cause.message,cause)
+        logger.error(cause.message, cause)
         ChannelUtils.closeOnFlush(ctx.channel())
     }
 }
