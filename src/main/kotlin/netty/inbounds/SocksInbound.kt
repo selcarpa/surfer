@@ -131,7 +131,6 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
 
 @Sharable
 class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage?>() {
-    private val b = io.netty.bootstrap.Bootstrap()
 
     companion object {
         private val logger = KotlinLogging.logger {}
@@ -158,9 +157,9 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
             when (outbound.protocol) {
                 "galaxy" -> {}
                 "trojan" -> {
-                    val eventLoopGroup = NioEventLoopGroup()
-                    val connectPromise = NioEventLoopGroup().next().newPromise<Channel>()
-                    connectPromise.addListener(object : FutureListener<Channel?> {
+                    StreamFactory.getStream(
+                        outbound.outboundStreamBy
+                    ).addListener(object : FutureListener<Channel?> {
                         override fun operationComplete(future: Future<Channel?>) {
                             val outboundChannel = future.now!!
                             if (future.isSuccess) {
@@ -201,9 +200,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                             }
                         }
                     })
-                    StreamFactory.getStream(
-                        outbound.outboundStreamBy, connectPromise, b, eventLoopGroup
-                    )
+
                 }
 
                 else -> {
@@ -243,23 +240,23 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
             }
         })
         val inboundChannel = originCTX.channel()
-        b.group(inboundChannel.eventLoop()).channel(NioSocketChannel::class.java)
-            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000).option(ChannelOption.SO_KEEPALIVE, true)
-            .handler(PromiseHandler(promise))
-        b.connect(message.dstAddr(), message.dstPort()).addListener(object : ChannelFutureListener {
-            @Throws(Exception::class)
-            override fun operationComplete(future: ChannelFuture) {
-                if (future.isSuccess) {
-                    // Connection established use handler provided results
-                } else {
-                    // Close the connection if the connection attempt has failed.
-                    originCTX.channel().writeAndFlush(
-                        DefaultSocks4CommandResponse(Socks4CommandStatus.REJECTED_OR_FAILED)
-                    )
-                    ChannelUtils.closeOnFlush(originCTX.channel())
-                }
-            }
-        })
+//        b.group(inboundChannel.eventLoop()).channel(NioSocketChannel::class.java)
+//            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000).option(ChannelOption.SO_KEEPALIVE, true)
+//            .handler(PromiseHandler(promise))
+//        b.connect(message.dstAddr(), message.dstPort()).addListener(object : ChannelFutureListener {
+//            @Throws(Exception::class)
+//            override fun operationComplete(future: ChannelFuture) {
+//                if (future.isSuccess) {
+//                    // Connection established use handler provided results
+//                } else {
+//                    // Close the connection if the connection attempt has failed.
+//                    originCTX.channel().writeAndFlush(
+//                        DefaultSocks4CommandResponse(Socks4CommandStatus.REJECTED_OR_FAILED)
+//                    )
+//                    ChannelUtils.closeOnFlush(originCTX.channel())
+//                }
+//            }
+//        })
     }
 
     @Suppress("OVERRIDE_DEPRECATION")

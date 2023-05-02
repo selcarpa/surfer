@@ -4,6 +4,7 @@ package netty.stream
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.ByteBufUtil
 import io.netty.channel.*
+import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.DefaultHttpHeaders
@@ -29,12 +30,13 @@ class StreamFactory {
     companion object {
         private val logger = KotlinLogging.logger {}
         fun getStream(
-            outboundStreamBy: OutboundStreamBy, connectPromise: Promise<Channel>, b: Bootstrap, eventLoopGroup: EventLoopGroup
-        ) {
+            outboundStreamBy: OutboundStreamBy
+        ): Promise<Channel> {
+
 //            logger.debug("init stream type: ${outboundStreamBy.type}")
             return when (outboundStreamBy.type) {
                 "ws", "wss" -> wsStream(
-                    outboundStreamBy.wsOutboundSettings[0], connectPromise, b, eventLoopGroup, outboundStreamBy.type
+                    outboundStreamBy.wsOutboundSettings[0], outboundStreamBy.type
                 )
 
                 else -> throw IllegalArgumentException("stream type ${outboundStreamBy.type} not supported")
@@ -43,11 +45,11 @@ class StreamFactory {
 
         private fun wsStream(
             wsOutboundSetting: WsOutboundSetting,
-            connectPromise: Promise<Channel>,
-            b: Bootstrap,
-            eventLoop: EventLoopGroup,
             type: String
-        ) {
+        ): Promise<Channel> {
+            val b = Bootstrap()
+            val eventLoop = NioEventLoopGroup()
+            val promise = eventLoop.next().newPromise<Channel>()
 
             val uri = URI("${type}://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
             val scheme = if (uri.scheme == null) "ws" else uri.scheme
@@ -76,7 +78,7 @@ class StreamFactory {
             val webSocketClientHandler = WebSocketClientHandler(
                 WebSocketClientHandshakerFactory.newHandshaker(
                     uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-                ), connectPromise
+                ),
             )
             b.group(eventLoop).channel(NioSocketChannel::class.java)
                 .handler(object : ChannelInitializer<SocketChannel>() {
@@ -96,15 +98,18 @@ class StreamFactory {
                     }
 
                 })
-            b.connect(uri.host, port)
-            webSocketClientHandler.connectPromise!!.sync()
+            b.connect(uri.host, port).sync()
+            webSocketClientHandler.handshakeFuture!!.sync().addListener {
+                promise.setSuccess(webSocketClientHandler.handshakeFuture!!.channel())
+            }
+            return promise
         }
     }
 
 }
 
 class WebSocketClientHandler(
-    private val handshaker: WebSocketClientHandshaker, val connectPromise: Promise<Channel>
+    private val handshaker: WebSocketClientHandshaker,
 ) : SimpleChannelInboundHandler<Any?>() {
     var handshakeFuture: ChannelPromise? = null
 
@@ -114,7 +119,7 @@ class WebSocketClientHandler(
 
     override fun channelActive(ctx: ChannelHandlerContext) {
         handshaker.handshake(ctx.channel()).addListener {
-            connectPromise.setSuccess(ctx.channel())
+            handshakeFuture!!.setSuccess()
         }
     }
 
@@ -134,7 +139,6 @@ class WebSocketClientHandler(
                 logger.debug("${ctx.channel().id().asShortText()} WebSocket Client connected!")
             } catch (e: WebSocketHandshakeException) {
                 logger.debug("WebSocket Client failed to connect")
-                connectPromise.setFailure(e)
             }
             return
         }
