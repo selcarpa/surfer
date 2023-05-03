@@ -27,7 +27,7 @@ class TrojanOutbound : ChannelOutboundHandlerAdapter() {
     override fun write(ctx: ChannelHandlerContext, msg: Any?, promise: ChannelPromise?) {
         when (msg) {
             is TrojanPackage -> {
-                val h1 = ByteBufUtil.decodeHexDump(msg.hexSha224Password)
+                val h1 = msg.hexSha224Password.toByteArray()
                 val h2 = ByteBufUtil.decodeHexDump("0d0a")
                 val h3 = msg.request.cmd.byteValue()
                 val h4 = msg.request.atyp.byteValue()
@@ -43,11 +43,6 @@ class TrojanOutbound : ChannelOutboundHandlerAdapter() {
                 out.writeBytes(h2)
                 out.writeBytes(ByteBufUtil.decodeHexDump(msg.payload))
                 val binaryWebSocketFrame = BinaryWebSocketFrame(out)
-                logger.info(
-                    "${ctx.channel().id().asShortText()} pipeline handlers: ${
-                        ctx.channel().pipeline().names()
-                    } write message:${binaryWebSocketFrame.javaClass.name}"
-                )
                 ctx.write(binaryWebSocketFrame).addListener {
                     FutureListener<Unit> {
                         if (!it.isSuccess) {
