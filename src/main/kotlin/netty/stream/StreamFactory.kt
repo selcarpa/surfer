@@ -3,7 +3,10 @@ package netty.stream
 
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.ByteBufUtil
-import io.netty.channel.*
+import io.netty.channel.Channel
+import io.netty.channel.ChannelHandlerContext
+import io.netty.channel.ChannelInitializer
+import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
@@ -17,6 +20,7 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.CharsetUtil
+import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
 import model.config.OutboundStreamBy
 import model.config.WsOutboundSetting
@@ -30,13 +34,14 @@ class StreamFactory {
     companion object {
         private val logger = KotlinLogging.logger {}
         fun getStream(
-            outboundStreamBy: OutboundStreamBy
+            outboundStreamBy: OutboundStreamBy,
+            connectListener: FutureListener<Channel?>
         ): Promise<Channel> {
 
 //            logger.debug("init stream type: ${outboundStreamBy.type}")
             return when (outboundStreamBy.type) {
                 "ws", "wss" -> wsStream(
-                    outboundStreamBy.wsOutboundSettings[0], outboundStreamBy.type
+                    outboundStreamBy.wsOutboundSettings[0], outboundStreamBy.type, connectListener
                 )
 
                 else -> throw IllegalArgumentException("stream type ${outboundStreamBy.type} not supported")
@@ -44,12 +49,12 @@ class StreamFactory {
         }
 
         private fun wsStream(
-            wsOutboundSetting: WsOutboundSetting,
-            type: String
+            wsOutboundSetting: WsOutboundSetting, type: String, connectListener: FutureListener<Channel?>
         ): Promise<Channel> {
             val b = Bootstrap()
             val eventLoop = NioEventLoopGroup()
             val promise = eventLoop.next().newPromise<Channel>()
+            promise.addListener(connectListener)
 
             val uri = URI("${type}://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
             val scheme = if (uri.scheme == null) "ws" else uri.scheme
@@ -78,8 +83,9 @@ class StreamFactory {
             val webSocketClientHandler = WebSocketClientHandler(
                 WebSocketClientHandshakerFactory.newHandshaker(
                     uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-                ),
+                ), promise
             )
+
             b.group(eventLoop).channel(NioSocketChannel::class.java)
                 .handler(object : ChannelInitializer<SocketChannel>() {
                     override fun initChannel(ch: SocketChannel) {
@@ -99,9 +105,7 @@ class StreamFactory {
 
                 })
             b.connect(uri.host, port).sync()
-            webSocketClientHandler.handshakeFuture!!.sync().addListener {
-                promise.setSuccess(webSocketClientHandler.handshakeFuture!!.channel())
-            }
+
             return promise
         }
     }
@@ -109,22 +113,15 @@ class StreamFactory {
 }
 
 class WebSocketClientHandler(
-    private val handshaker: WebSocketClientHandshaker,
+    private val handshaker: WebSocketClientHandshaker, private val connectPromise: Promise<Channel>
 ) : SimpleChannelInboundHandler<Any?>() {
-    var handshakeFuture: ChannelPromise? = null
 
     companion object {
         private val logger = KotlinLogging.logger {}
     }
 
     override fun channelActive(ctx: ChannelHandlerContext) {
-        handshaker.handshake(ctx.channel()).addListener {
-            handshakeFuture!!.setSuccess()
-        }
-    }
-
-    override fun handlerAdded(ctx: ChannelHandlerContext?) {
-        handshakeFuture = ctx!!.newPromise()
+        handshaker.handshake(ctx.channel())
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
@@ -137,8 +134,10 @@ class WebSocketClientHandler(
             try {
                 handshaker.finishHandshake(ch, msg as FullHttpResponse?)
                 logger.debug("${ctx.channel().id().asShortText()} WebSocket Client connected!")
+                connectPromise.setSuccess(ctx.channel())
             } catch (e: WebSocketHandshakeException) {
                 logger.debug("WebSocket Client failed to connect")
+                connectPromise.setFailure(e)
             }
             return
         }

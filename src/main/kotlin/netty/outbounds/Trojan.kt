@@ -10,6 +10,7 @@ import io.netty.channel.ChannelOutboundHandlerAdapter
 import io.netty.channel.ChannelPromise
 import io.netty.handler.codec.http.websocketx.BinaryWebSocketFrame
 import io.netty.util.ReferenceCountUtil
+import io.netty.util.concurrent.FutureListener
 import model.config.TrojanSetting
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
@@ -48,13 +49,15 @@ class TrojanOutbound : ChannelOutboundHandlerAdapter() {
                     } write message:${binaryWebSocketFrame.javaClass.name}"
                 )
                 ctx.write(binaryWebSocketFrame).addListener {
-                    if (!it.isSuccess) {
-                        logger.error(
-                            "write message:${msg.javaClass.name} to ${
-                                ctx.channel().id().asShortText()
-                            } failed ${ctx.channel().pipeline().names()}",
-                            it.cause()
-                        )
+                    FutureListener<Unit> {
+                        if (!it.isSuccess) {
+                            logger.error(
+                                "write message:${msg.javaClass.name} to ${
+                                    ctx.channel().id().asShortText()
+                                } failed ${ctx.channel().pipeline().names()}",
+                                it.cause()
+                            )
+                        }
                     }
                 }
             }

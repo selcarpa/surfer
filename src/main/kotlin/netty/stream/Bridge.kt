@@ -6,6 +6,7 @@ import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.util.ReferenceCountUtil
+import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
 import mu.KotlinLogging
 import utils.ChannelUtils
@@ -25,17 +26,20 @@ open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInbou
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (relayChannel.isActive) {
             logger.debug(
-                "${relayChannel.id().asShortText()} pipeline handlers:${
-                    relayChannel.pipeline().names()
-                }, write message:${msg.javaClass.name}"
+                "{} pipeline handlers:{}, write message:{}",
+                relayChannel.id().asShortText(),
+                relayChannel.pipeline().names(),
+                msg.javaClass.name
             )
             relayChannel.writeAndFlush(msg).addListener {
-                if (!it.isSuccess) {
-                    logger.error(
-                        "write message:${msg.javaClass.name} to ${relayChannel.id().asShortText()} failed",
-                        it.cause()
-                    )
-                    logger.error(it.cause().message, it.cause())
+                FutureListener<Void> {
+                    if (!it.isSuccess) {
+                        logger.error(
+                            "write message:${msg.javaClass.name} to ${relayChannel.id().asShortText()} failed",
+                            it.cause()
+                        )
+                        logger.error(it.cause().message, it.cause())
+                    }
                 }
             }
         } else {

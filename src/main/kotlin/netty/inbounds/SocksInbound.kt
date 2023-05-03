@@ -3,8 +3,6 @@ package netty.inbounds
 
 import io.netty.channel.*
 import io.netty.channel.ChannelHandler.Sharable
-import io.netty.channel.nio.NioEventLoopGroup
-import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.socksx.SocksMessage
 import io.netty.handler.codec.socksx.SocksVersion
 import io.netty.handler.codec.socksx.v4.DefaultSocks4CommandResponse
@@ -19,12 +17,10 @@ import model.protocol.TrojanRequest
 import mu.KotlinLogging
 import netty.outbounds.TrojanOutbound
 import netty.outbounds.TrojanRelayInboundHandler
-import netty.stream.PromiseHandler
 import netty.stream.RelayInboundHandler
 import netty.stream.StreamFactory
 import utils.ChannelUtils
 import utils.EasyPUtils.resolveOutbound
-import java.lang.Exception
 
 @Sharable
 class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
@@ -157,9 +153,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
             when (outbound.protocol) {
                 "galaxy" -> {}
                 "trojan" -> {
-                    StreamFactory.getStream(
-                        outbound.outboundStreamBy
-                    ).addListener(object : FutureListener<Channel?> {
+                    val connectListener = object : FutureListener<Channel?> {
                         override fun operationComplete(future: Future<Channel?>) {
                             val outboundChannel = future.now!!
                             if (future.isSuccess) {
@@ -199,7 +193,10 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                                 ChannelUtils.closeOnFlush(originCTX.channel())
                             }
                         }
-                    })
+                    }
+                    StreamFactory.getStream(
+                        outbound.outboundStreamBy, connectListener
+                    ).sync()
 
                 }
 
