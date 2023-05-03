@@ -8,7 +8,8 @@ data class Inbound(
     val port: Int,
     val protocol: String,
     val inboundStreamBy: InboundStreamBy?,
-    val socks5Setting: Socks5Setting?
+    val socks5Setting: Socks5Setting?,
+    val trojanSettings: List<TrojanSetting>?
 )
 
 data class Socks5Setting(val auth: Auth?)

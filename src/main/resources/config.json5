@@ -17,7 +17,7 @@
         "type": "ws",
         "wsInboundSettings": [
           {
-            "path": "/shiroi"
+            "path": "/exam"
           }
         ]
       }
@@ -34,13 +34,13 @@
         "wsOutboundSettings": [
           {
             "port": 443,
-            "host": "t4.aethli.cn",
-            "path": "/shiroi"
+            "host": "a.exampl.com",
+            "path": "/exam"
           }
         ]
       },
       "trojanSetting": {
-        "password": "5f89cba3-778d-4262-ae06-e87024f41eed"
+        "password": "password that is a uuid"
       }
     }
   ]

@@ -4,6 +4,7 @@ package netty
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.*
+import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
 import io.netty.handler.stream.ChunkedWriteHandler
 import io.netty.handler.timeout.IdleStateHandler
@@ -77,11 +78,16 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
     }
 
     private fun initTrojanInbound(ch: NioSocketChannel, inbound: Inbound) {
-        ch.pipeline().addLast(HttpServerCodec())
-        ch.pipeline().addLast(ChunkedWriteHandler())
-        ch.pipeline().addLast(HttpObjectAggregator(65536))
-        ch.pipeline().addLast(IdleStateHandler(60, 60, 60))
-        ch.pipeline().addLast(WebsocketInbound())
+        when (inbound.inboundStreamBy!!.type) {
+            "ws" -> {
+                ch.pipeline().addLast(HttpServerCodec())
+                ch.pipeline().addLast(ChunkedWriteHandler())
+                ch.pipeline().addLast(HttpObjectAggregator(65536))
+                ch.pipeline().addLast(IdleStateHandler(60, 60, 60))
+                ch.pipeline().addLast(WebSocketServerProtocolHandler(inbound.inboundStreamBy.wsInboundSettings[0].path))
+                ch.pipeline().addLast(WebsocketInbound(inbound))
+            }
+        }
 
     }
 }

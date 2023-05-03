@@ -16,12 +16,10 @@ import io.netty.handler.codec.socksx.v5.*
 import io.netty.util.concurrent.Future
 import io.netty.util.concurrent.FutureListener
 import model.config.Inbound
-import model.protocol.TrojanRequest
 import mu.KotlinLogging
+import netty.outbounds.GalaxyOutbound
 import netty.outbounds.TrojanOutbound
-import netty.outbounds.TrojanRelayInboundHandler
 import netty.stream.RelayInboundHandler
-import netty.stream.StreamFactory
 import utils.ChannelUtils
 import utils.EasyPUtils.resolveOutbound
 
@@ -154,11 +152,12 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
         val resolveOutbound = resolveOutbound(inbound)
         resolveOutbound.ifPresent { outbound ->
             when (outbound.protocol) {
-                "galaxy" -> {}
-                "trojan" -> {
-                    val connectListener = FutureListener<Channel?> { future ->
-                        val outboundChannel = future.now!!
-                        if (future.isSuccess) {
+                "galaxy" -> {
+                    GalaxyOutbound.outbound(
+                        originCTX,
+                        outbound,
+                        RelayInboundHandler(originCTX.channel()),
+                        {
                             originCTX.channel().writeAndFlush(
                                 DefaultSocks5CommandResponse(
                                     Socks5CommandStatus.SUCCESS,
@@ -166,24 +165,9 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                                     message.dstAddr(),
                                     message.dstPort()
                                 )
-                            ).also {
-                                it.addListener(ChannelFutureListener {
-                                    outboundChannel.pipeline().addLast(
-                                        TrojanOutbound(), RelayInboundHandler(originCTX.channel()),
-                                    )
-                                    originCTX.pipeline().addLast(
-                                        TrojanRelayInboundHandler(
-                                            outboundChannel, outbound.trojanSetting!!, TrojanRequest(
-                                                Socks5CommandType.CONNECT,
-                                                message.dstAddrType(),
-                                                message.dstAddr(),
-                                                message.dstPort()
-                                            )
-                                        ),
-                                    )
-                                })
-                            }
-                        } else {
+                            )
+                        },
+                        {
                             //while connect failed, write failure response to client, and close the connection
                             originCTX.channel().writeAndFlush(
                                 DefaultSocks5CommandResponse(
@@ -192,10 +176,35 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                             )
                             ChannelUtils.closeOnFlush(originCTX.channel())
                         }
-                    }
-                    StreamFactory.getStream(
-                        outbound.outboundStreamBy, connectListener
-                    ).sync()
+                    )
+                }
+
+                "trojan" -> {
+                    TrojanOutbound.outbound(
+                        originCTX,
+                        outbound,
+                        message.dstAddrType().byteValue(),
+                        message.dstAddr(),
+                        message.dstPort(),
+                        {
+                            originCTX.channel().writeAndFlush(
+                                DefaultSocks5CommandResponse(
+                                    Socks5CommandStatus.SUCCESS,
+                                    message.dstAddrType(),
+                                    message.dstAddr(),
+                                    message.dstPort()
+                                )
+                            )
+                        },
+                        {
+                            //while connect failed, write failure response to client, and close the connection
+                            originCTX.channel().writeAndFlush(
+                                DefaultSocks5CommandResponse(
+                                    Socks5CommandStatus.FAILURE, message.dstAddrType()
+                                )
+                            )
+                            ChannelUtils.closeOnFlush(originCTX.channel())
+                        })
 
                 }
 
@@ -261,4 +270,3 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
         ChannelUtils.closeOnFlush(ctx.channel())
     }
 }
-

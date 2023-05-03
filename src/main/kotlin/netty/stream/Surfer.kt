@@ -3,10 +3,8 @@ package netty.stream
 
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.ByteBufUtil
-import io.netty.channel.Channel
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInitializer
-import io.netty.channel.SimpleChannelInboundHandler
+import io.netty.buffer.Unpooled
+import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
@@ -20,37 +18,38 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.CharsetUtil
+import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
 import model.config.OutboundStreamBy
 import model.config.WsOutboundSetting
 import mu.KotlinLogging
+import utils.ChannelUtils
 import java.net.URI
 
 
-class StreamFactory {
-//    val streams:MutableMap<String,MutableList<>>
+class Surfer {
 
     companion object {
         private val logger = KotlinLogging.logger {}
-        fun getStream(
+        fun outbound(
             outboundStreamBy: OutboundStreamBy,
             connectListener: FutureListener<Channel?>
-        ): Promise<Channel> {
-
-//            logger.debug("init stream type: ${outboundStreamBy.type}")
+        ) {
             return when (outboundStreamBy.type) {
                 "ws", "wss" -> wsStream(
-                    outboundStreamBy.wsOutboundSettings[0], outboundStreamBy.type, connectListener
+                    connectListener, outboundStreamBy.wsOutboundSettings[0], outboundStreamBy.type
                 )
 
-                else -> throw IllegalArgumentException("stream type ${outboundStreamBy.type} not supported")
+                else -> {
+                    logger.error { "stream type ${outboundStreamBy.type} not supported" }
+                }
             }
         }
 
         private fun wsStream(
-            wsOutboundSetting: WsOutboundSetting, type: String, connectListener: FutureListener<Channel?>
-        ): Promise<Channel> {
+            connectListener: FutureListener<Channel?>, wsOutboundSetting: WsOutboundSetting, type: String
+        ) {
             val b = Bootstrap()
             val eventLoop = NioEventLoopGroup()
             val promise = eventLoop.next().newPromise<Channel>()
@@ -93,7 +92,6 @@ class StreamFactory {
                             ch.pipeline()
                                 .addLast(sslCtx.newHandler(ch.alloc(), wsOutboundSetting.host, wsOutboundSetting.port))
                         }
-                        //        logger.debug("init ws client: $uri")
 
                         ch.pipeline().addLast(
                             HttpClientCodec(),
@@ -106,7 +104,6 @@ class StreamFactory {
                 })
             b.connect(uri.host, port).sync()
 
-            return promise
         }
     }
 
@@ -167,5 +164,55 @@ class WebSocketClientHandler(
                 ctx.fireChannelRead(frame)
             }
         }
+    }
+}
+
+/**
+ * relay from client channel to server
+ */
+open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInboundHandlerAdapter() {
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
+
+    override fun channelActive(ctx: ChannelHandlerContext) {
+        ctx.writeAndFlush(Unpooled.EMPTY_BUFFER)
+    }
+
+    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+        if (relayChannel.isActive) {
+            logger.debug(
+                "{} pipeline handlers:{}, write message:{}",
+                relayChannel.id().asShortText(),
+                relayChannel.pipeline().names(),
+                msg.javaClass.name
+            )
+            relayChannel.writeAndFlush(msg).addListener {
+                FutureListener<Void> {
+                    if (!it.isSuccess) {
+                        logger.error(
+                            "write message:${msg.javaClass.name} to ${relayChannel.id().asShortText()} failed",
+                            it.cause()
+                        )
+                        logger.error(it.cause().message, it.cause())
+                    }
+                }
+            }
+        } else {
+            logger.error("relay channel is not active, close message:${msg.javaClass.name}")
+            ReferenceCountUtil.release(msg)
+        }
+    }
+
+    override fun channelInactive(ctx: ChannelHandlerContext) {
+        if (relayChannel.isActive) {
+            ChannelUtils.closeOnFlush(relayChannel)
+        }
+    }
+
+    @Suppress("OVERRIDE_DEPRECATION")
+    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+        logger.error(cause.message, cause)
+        ctx.close()
     }
 }
