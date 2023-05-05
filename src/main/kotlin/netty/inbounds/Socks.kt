@@ -18,7 +18,7 @@ import io.netty.util.concurrent.FutureListener
 import model.config.Inbound
 import mu.KotlinLogging
 import netty.outbounds.GalaxyOutbound
-import netty.outbounds.TrojanOutbound
+import netty.outbounds.Trojan
 import netty.stream.RelayInboundHandler
 import utils.ChannelUtils
 import utils.EasyPUtils.resolveOutbound
@@ -157,6 +157,8 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                         originCTX,
                         outbound,
                         RelayInboundHandler(originCTX.channel()),
+                        message.dstAddr(),
+                        message.dstPort(),
                         {
                             originCTX.channel().writeAndFlush(
                                 DefaultSocks5CommandResponse(
@@ -180,7 +182,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                 }
 
                 "trojan" -> {
-                    TrojanOutbound.outbound(
+                    Trojan.outbound(
                         originCTX,
                         outbound,
                         message.dstAddrType().byteValue(),
@@ -194,7 +196,9 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                                     message.dstAddr(),
                                     message.dstPort()
                                 )
-                            )
+                            ).addListener(ChannelFutureListener {
+//                                originCTX.pipeline().remove(this@SocksServerConnectHandler)
+                            })
                         },
                         {
                             //while connect failed, write failure response to client, and close the connection

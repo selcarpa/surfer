@@ -21,10 +21,11 @@ import io.netty.util.CharsetUtil
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
-import model.config.OutboundStreamBy
+import model.config.Outbound
 import model.config.WsOutboundSetting
 import mu.KotlinLogging
 import utils.ChannelUtils
+import java.net.InetSocketAddress
 import java.net.URI
 
 
@@ -33,18 +34,50 @@ class Surfer {
     companion object {
         private val logger = KotlinLogging.logger {}
         fun outbound(
-            outboundStreamBy: OutboundStreamBy,
+            outbound:Outbound,
             connectListener: FutureListener<Channel?>
         ) {
-            return when (outboundStreamBy.type) {
+            return outbound(
+                outbound,
+                connectListener,
+                null
+            )
+        }
+
+
+        fun outbound(
+            outbound: Outbound,
+            connectListener: FutureListener<Channel?>,
+            socketAddress: InetSocketAddress?
+        ) {
+            if (outbound.outboundStreamBy == null) {
+                return galaxy(connectListener, socketAddress!!)
+            }
+            return when (outbound.outboundStreamBy.type) {
                 "ws", "wss" -> wsStream(
-                    connectListener, outboundStreamBy.wsOutboundSettings[0], outboundStreamBy.type
+                    connectListener, outbound.outboundStreamBy.wsOutboundSettings[0], outbound.outboundStreamBy.type
                 )
 
                 else -> {
-                    logger.error { "stream type ${outboundStreamBy.type} not supported" }
+                    logger.error { "stream type ${outbound.outboundStreamBy.type} not supported" }
                 }
             }
+        }
+
+        private fun galaxy(connectListener: FutureListener<Channel?>, socketAddress: InetSocketAddress) {
+            val b = Bootstrap()
+            val eventLoop = NioEventLoopGroup()
+            val promise = eventLoop.next().newPromise<Channel>()
+            promise.addListener(connectListener)
+            b.group(eventLoop).channel(NioSocketChannel::class.java)
+                .option(ChannelOption.TCP_NODELAY, true)
+                .handler(object : ChannelInboundHandlerAdapter() {
+                    override fun channelRead(ctx1: ChannelHandlerContext, msg: Any) {
+                        logger.debug("id: {}, receive msg: {}", ctx1.channel().id().asShortText(), msg)
+                        promise.setSuccess(ctx1.channel())
+                    }
+                })
+            b.connect(socketAddress).sync()
         }
 
         private fun wsStream(
@@ -70,7 +103,7 @@ class Surfer {
             }
 
 
-            val ssl = "wss".equals(scheme, ignoreCase = true)
+            val ssl = "wss".equals(type, ignoreCase = true)
             val sslCtx: SslContext? = if (ssl) {
                 SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
             } else {
@@ -131,6 +164,7 @@ class WebSocketClientHandler(
             try {
                 handshaker.finishHandshake(ch, msg as FullHttpResponse?)
                 logger.debug("${ctx.channel().id().asShortText()} WebSocket Client connected!")
+//                ctx.channel().pipeline().remove(this)
                 connectPromise.setSuccess(ctx.channel())
             } catch (e: WebSocketHandshakeException) {
                 logger.debug("WebSocket Client failed to connect")
@@ -160,8 +194,9 @@ class WebSocketClientHandler(
             }
 
             is BinaryWebSocketFrame -> {
-                logger.debug("WebSocket Client received binary:${ByteBufUtil.hexDump(frame.content().array())}")
-                ctx.fireChannelRead(frame)
+                val content = frame.content()
+                logger.debug("WebSocket Client received binary:${ByteBufUtil.hexDump(content.array())}")
+                ctx.fireChannelRead(content)
             }
         }
     }

@@ -1,6 +1,7 @@
 package netty
 
 
+import TrojanInboundHandler
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.*
@@ -13,7 +14,7 @@ import model.config.Inbound
 import mu.KotlinLogging
 import netty.inbounds.HttpProxyServerHandler
 import netty.inbounds.SocksServerHandler
-import netty.inbounds.WebsocketInbound
+import netty.inbounds.WebsocketInboundHandler
 import java.util.function.Function
 import java.util.stream.Collectors
 
@@ -22,6 +23,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
+
     override fun initChannel(ch: NioSocketChannel) {
 
         val localAddress = ch.localAddress()
@@ -85,7 +87,9 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
                 ch.pipeline().addLast(HttpObjectAggregator(65536))
                 ch.pipeline().addLast(IdleStateHandler(60, 60, 60))
                 ch.pipeline().addLast(WebSocketServerProtocolHandler(inbound.inboundStreamBy.wsInboundSettings[0].path))
-                ch.pipeline().addLast(WebsocketInbound(inbound))
+                ch.pipeline().addLast(WebsocketInboundHandler { ctx, _ ->
+                    ctx.pipeline().addLast(TrojanInboundHandler(inbound))
+                })
             }
         }
 

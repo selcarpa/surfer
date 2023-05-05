@@ -1,26 +1,29 @@
 package netty.inbounds
 
 
-import io.netty.buffer.ByteBufUtil
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
-import io.netty.channel.DefaultChannelPromise
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.websocketx.*
-import model.config.Inbound
 import mu.KotlinLogging
-import netty.outbounds.GalaxyOutbound
-import netty.stream.RelayInboundHandler
-import utils.EasyPUtils
 
-class WebsocketInbound(private val inbound: Inbound) : ChannelInboundHandlerAdapter() {
+class WebsocketInboundHandler(
+    private val handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit
+) : ChannelInboundHandlerAdapter() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
 
+    override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
+        if (evt is WebSocketServerProtocolHandler.HandshakeComplete) {
+            logger.debug("WebsocketInbound HandshakeComplete")
+            handshakeCompleteCallBack(ctx, evt)
+        }
+        super.userEventTriggered(ctx, evt)
+    }
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-
+        logger.debug("WebsocketInbound receive message:${msg.javaClass.name}")
         when (msg) {
             is FullHttpRequest -> {
                 //ignored
@@ -45,40 +48,18 @@ class WebsocketInbound(private val inbound: Inbound) : ChannelInboundHandlerAdap
             }
 
             is BinaryWebSocketFrame -> {
-                binaryFrameMsg(ctx, msg)
+                logger.debug(
+                    "WebsocketInbound receive message:{}, pipeline handlers:{}",
+                    msg.javaClass.name,
+                    ctx.pipeline().names()
+                )
+                ctx.fireChannelRead(msg.content())
             }
 
             else -> {
                 logger.error("WebsocketInbound receive unknown message:${msg.javaClass.name}")
             }
         }
-    }
-
-    private fun binaryFrameMsg(originCTX: ChannelHandlerContext, msg: BinaryWebSocketFrame) {
-        val currentAllBytes = ByteArray(msg.content().readableBytes())
-        msg.content().readBytes(currentAllBytes)
-        logger.debug(
-            "WebsocketInbound receive message:${msg.javaClass.name} ${ByteBufUtil.hexDump(currentAllBytes)}"
-        )
-        val resolveOutbound = EasyPUtils.resolveOutbound(inbound)
-        resolveOutbound.ifPresent { outbound ->
-            when (inbound.protocol) {
-                "trojan" -> {
-                    GalaxyOutbound.outbound(
-                        originCTX,
-                        outbound,
-                        RelayInboundHandler(originCTX.channel()),
-                        {
-                            DefaultChannelPromise(originCTX.channel()).setSuccess()
-                        },
-                        {
-                            DefaultChannelPromise(originCTX.channel()).setSuccess()
-                        }
-                    )
-                }
-            }
-        }
-
     }
 
 }
