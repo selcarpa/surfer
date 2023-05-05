@@ -34,7 +34,7 @@ class Surfer {
     companion object {
         private val logger = KotlinLogging.logger {}
         fun outbound(
-            outbound:Outbound,
+            outbound: Outbound,
             connectListener: FutureListener<Channel?>
         ) {
             return outbound(
@@ -72,9 +72,9 @@ class Surfer {
             b.group(eventLoop).channel(NioSocketChannel::class.java)
                 .option(ChannelOption.TCP_NODELAY, true)
                 .handler(object : ChannelInboundHandlerAdapter() {
-                    override fun channelRead(ctx1: ChannelHandlerContext, msg: Any) {
-                        logger.debug("id: {}, receive msg: {}", ctx1.channel().id().asShortText(), msg)
-                        promise.setSuccess(ctx1.channel())
+                    override fun channelActive(ctx: ChannelHandlerContext) {
+                        super.channelActive(ctx)
+                        promise.setSuccess(ctx.channel())
                     }
                 })
             b.connect(socketAddress).sync()

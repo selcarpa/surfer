@@ -21,7 +21,6 @@ class GalaxyOutbound {
         fun outbound(
             originCTX: ChannelHandlerContext,
             outbound: Outbound,
-            relayOutBoundHandler: RelayInboundHandler,
             host: String,
             port: Int,
             connectSuccess: () -> ChannelFuture,
@@ -33,7 +32,7 @@ class GalaxyOutbound {
                     connectSuccess().also { channelFuture ->
                         channelFuture.addListener(ChannelFutureListener {
                             outboundChannel.pipeline().addLast(
-                                relayOutBoundHandler
+                                RelayInboundHandler(originCTX.channel()),
                             )
                             originCTX.pipeline().addLast(
                                 RelayInboundHandler(outboundChannel),

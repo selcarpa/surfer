@@ -9,7 +9,6 @@ import model.config.Inbound
 import model.protocol.TrojanPackage
 import mu.KotlinLogging
 import netty.outbounds.GalaxyOutbound
-import netty.stream.RelayInboundHandler
 import utils.ChannelUtils
 import utils.EasyPUtils
 import utils.Sha224Utils
@@ -33,7 +32,6 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                             GalaxyOutbound.outbound(
                                 originCTX,
                                 outbound,
-                                RelayInboundHandler(originCTX.channel()),
                                 trojanPackage.request.host,
                                 trojanPackage.request.port,
                                 {

@@ -156,7 +156,6 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                     GalaxyOutbound.outbound(
                         originCTX,
                         outbound,
-                        RelayInboundHandler(originCTX.channel()),
                         message.dstAddr(),
                         message.dstPort(),
                         {
