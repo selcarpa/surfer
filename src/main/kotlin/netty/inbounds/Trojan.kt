@@ -1,4 +1,3 @@
-
 import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
@@ -25,7 +24,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
         inbound.trojanSettings!!.stream()
             .filter { Sha224Utils.encryptAndHex(it.password) == trojanPackage.hexSha224Password }.findFirst()
             .ifPresent {
-
+                logger.debug { "id: ${originCTX.channel().id().asShortText()}, accept trojan inbound" }
                 EasyPUtils.resolveOutbound(inbound).ifPresent { outbound ->
                     when (outbound.protocol) {
                         "galaxy" -> {
@@ -63,8 +62,8 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                     }
                 }
 
-
             }
+        logger.warn { "id: ${originCTX.channel().id().asShortText()}, drop trojan package, no password matched" }
     }
 
 

@@ -35,7 +35,7 @@ class Surfer {
         private val logger = KotlinLogging.logger {}
         fun outbound(
             outbound: Outbound,
-            connectListener: FutureListener<Channel?>
+            connectListener: FutureListener<Channel>
         ) {
             return outbound(
                 outbound,
@@ -47,7 +47,7 @@ class Surfer {
 
         fun outbound(
             outbound: Outbound,
-            connectListener: FutureListener<Channel?>,
+            connectListener: FutureListener<Channel>,
             socketAddress: InetSocketAddress?
         ) {
             if (outbound.outboundStreamBy == null) {
@@ -64,7 +64,7 @@ class Surfer {
             }
         }
 
-        private fun galaxy(connectListener: FutureListener<Channel?>, socketAddress: InetSocketAddress) {
+        private fun galaxy(connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress) {
             val b = Bootstrap()
             val eventLoop = NioEventLoopGroup()
             val promise = eventLoop.next().newPromise<Channel>()
@@ -81,7 +81,7 @@ class Surfer {
         }
 
         private fun wsStream(
-            connectListener: FutureListener<Channel?>, wsOutboundSetting: WsOutboundSetting, type: String
+            connectListener: FutureListener<Channel>, wsOutboundSetting: WsOutboundSetting, type: String
         ) {
             val b = Bootstrap()
             val eventLoop = NioEventLoopGroup()

@@ -26,9 +26,10 @@ class GalaxyOutbound {
             connectSuccess: () -> ChannelFuture,
             connectFail: () -> Unit
         ) {
-            val connectListener = FutureListener<Channel?> { future ->
-                val outboundChannel = future.now!!
+            val connectListener = FutureListener<Channel> { future ->
+                val outboundChannel = future.now
                 if (future.isSuccess) {
+                    logger.debug { "outbound to $host:$port success" }
                     connectSuccess().also { channelFuture ->
                         channelFuture.addListener(ChannelFutureListener {
                             outboundChannel.pipeline().addLast(
