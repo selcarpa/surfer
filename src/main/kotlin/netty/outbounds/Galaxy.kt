@@ -18,19 +18,20 @@ import java.net.InetSocketAddress
 class GalaxyOutbound {
     companion object {
         private val logger = KotlinLogging.logger {}
+
         fun outbound(
             originCTX: ChannelHandlerContext,
             outbound: Outbound,
             host: String,
             port: Int,
-            connectSuccess: () -> ChannelFuture,
+            connectSuccess: (Channel) -> ChannelFuture,
             connectFail: () -> Unit
         ) {
             val connectListener = FutureListener<Channel> { future ->
                 val outboundChannel = future.now
                 if (future.isSuccess) {
                     logger.debug { "outbound to $host:$port success" }
-                    connectSuccess().also { channelFuture ->
+                    connectSuccess(outboundChannel).also { channelFuture ->
                         channelFuture.addListener(ChannelFutureListener {
                             outboundChannel.pipeline().addLast(
                                 RelayInboundHandler(originCTX.channel()),

@@ -33,22 +33,11 @@ class Surfer {
 
     companion object {
         private val logger = KotlinLogging.logger {}
-        fun outbound(
-            outbound: Outbound,
-            connectListener: FutureListener<Channel>
-        ) {
-            return outbound(
-                outbound,
-                connectListener,
-                null
-            )
-        }
-
 
         fun outbound(
             outbound: Outbound,
             connectListener: FutureListener<Channel>,
-            socketAddress: InetSocketAddress?
+            socketAddress: InetSocketAddress? = null
         ) {
             if (outbound.outboundStreamBy == null) {
                 return galaxy(connectListener, socketAddress!!)

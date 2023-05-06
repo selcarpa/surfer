@@ -36,7 +36,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
         if (inbound != null) {
             when (inbound.protocol) {
                 "http" -> {
-                    initHttpInbound(ch)
+                    initHttpInbound(ch, inbound)
                     return
                 }
 
@@ -61,22 +61,16 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
         ch.pipeline().addLast(SocksServerHandler(inbound))
     }
 
-    private fun initHttpInbound(ch: NioSocketChannel) {
+    private fun initHttpInbound(ch: NioSocketChannel, inbound: Inbound) {
         // http proxy send a http response to client
-        ch.pipeline().addLast(
-            HttpResponseEncoder()
-        )
+        ch.pipeline().addLast(HttpResponseEncoder())
         // http proxy send a http request to server
-        ch.pipeline().addLast(
-            HttpRequestDecoder()
-        )
-        ch.pipeline().addLast(
-            HttpProxyServerHandler()
-        )
+        ch.pipeline().addLast(HttpRequestDecoder())
         ch.pipeline().addLast(ChunkedWriteHandler())
-        ch.pipeline().addLast("aggregator", HttpObjectAggregator(10 * 1024 * 1024))
-        ch.pipeline().addLast("compressor", HttpContentCompressor())
+        ch.pipeline().addLast(HttpObjectAggregator(10 * 1024 * 1024))
+        ch.pipeline().addLast(HttpContentCompressor())
         ch.pipeline().addLast(HttpServerCodec())
+        ch.pipeline().addLast(HttpProxyServerHandler(inbound))
     }
 
     private fun initTrojanInbound(ch: NioSocketChannel, inbound: Inbound) {

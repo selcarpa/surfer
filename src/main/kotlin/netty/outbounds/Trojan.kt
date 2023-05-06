@@ -52,7 +52,7 @@ object Trojan {
             }
         }
         Surfer.outbound(
-            outbound, connectListener
+            outbound = outbound, connectListener = connectListener
         )
     }
 }

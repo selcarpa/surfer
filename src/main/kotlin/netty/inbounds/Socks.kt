@@ -67,20 +67,28 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
             ctx.close()
             return
         }
-        if (socksRequest is Socks5InitialRequest) {
-            socks5auth(ctx)
-        } else if (socksRequest is Socks5PasswordAuthRequest) {
-            socks5DoAuth(socksRequest, ctx)
-        } else if (socksRequest is Socks5CommandRequest) {
-            if (socksRequest.type() === Socks5CommandType.CONNECT) {
-                ctx.pipeline().addLast(SocksServerConnectHandler(inbound))
-                ctx.pipeline().remove(this)
-                ctx.fireChannelRead(socksRequest)
-            } else {
+        when (socksRequest) {
+            is Socks5InitialRequest -> {
+                socks5auth(ctx)
+            }
+
+            is Socks5PasswordAuthRequest -> {
+                socks5DoAuth(socksRequest, ctx)
+            }
+
+            is Socks5CommandRequest -> {
+                if (socksRequest.type() === Socks5CommandType.CONNECT) {
+                    ctx.pipeline().addLast(SocksServerConnectHandler(inbound))
+                    ctx.pipeline().remove(this)
+                    ctx.fireChannelRead(socksRequest)
+                } else {
+                    ctx.close()
+                }
+            }
+
+            else -> {
                 ctx.close()
             }
-        } else {
-            ctx.close()
         }
     }
 
