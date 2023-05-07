@@ -68,6 +68,15 @@ class Surfer {
                         super.channelActive(ctx)
                         promise.setSuccess(ctx.channel())
                     }
+
+                    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+                        logger.debug {
+                            "id: ${
+                                ctx.channel().id().asShortText()
+                            }, galaxy read ${msg}, piplines: ${ctx.channel().pipeline().names()}"
+                        }
+                        super.channelRead(ctx, msg)
+                    }
                 })
             b.connect(socketAddress).sync()
         }
