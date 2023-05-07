@@ -9,7 +9,7 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
 import io.netty.handler.stream.ChunkedWriteHandler
 import io.netty.handler.timeout.IdleStateHandler
-import model.config.ConfigurationHolder
+import model.config.ConfigurationSettings.Companion.Configuration
 import model.config.Inbound
 import mu.KotlinLogging
 import netty.inbounds.HttpProxyServerHandler
@@ -28,9 +28,8 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
         val localAddress = ch.localAddress()
 
-        val configuration = ConfigurationHolder.configuration
         val portInboundMap =
-            configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
+            Configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
         val inbound = portInboundMap[localAddress.port]
         //todo refactor to strategy pattern
         if (inbound != null) {

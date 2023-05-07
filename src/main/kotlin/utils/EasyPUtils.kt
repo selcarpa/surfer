@@ -1,6 +1,6 @@
 package utils
 
-import model.config.ConfigurationHolder
+import model.config.ConfigurationSettings.Companion.Configuration
 import model.config.Inbound
 import model.config.Outbound
 import java.util.*
@@ -10,7 +10,7 @@ import java.util.*
  */
 object EasyPUtils {
     fun resolveOutbound(inbound: Inbound): Optional<Outbound> {
-        return ConfigurationHolder.configuration.outbounds.stream().filter { true }.findFirst()
+        return Configuration.outbounds.stream().filter { true }.findFirst()
     }
 
 }

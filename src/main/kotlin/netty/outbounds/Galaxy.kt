@@ -33,6 +33,10 @@ class GalaxyOutbound {
                     logger.debug { "outbound to $host:$port success" }
                     connectSuccess(outboundChannel).also { channelFuture ->
                         channelFuture.addListener(ChannelFutureListener {
+                            if (!it.isSuccess) {
+                                logger.error("id: ${it.channel().id().asShortText()}, write fail, cause ", it.cause())
+                                return@ChannelFutureListener
+                            }
                             outboundChannel.pipeline().addLast(
                                 RelayInboundHandler(originCTX.channel()),
                             )

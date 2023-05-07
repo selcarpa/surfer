@@ -14,6 +14,8 @@ import io.netty.handler.codec.http.HttpClientCodec
 import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.websocketx.*
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
+import io.netty.handler.logging.LogLevel
+import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
@@ -60,6 +62,7 @@ class Surfer {
             promise.addListener(connectListener)
             b.group(eventLoop).channel(NioSocketChannel::class.java)
                 .option(ChannelOption.TCP_NODELAY, true)
+                .handler(LoggingHandler(LogLevel.DEBUG))
                 .handler(object : ChannelInboundHandlerAdapter() {
                     override fun channelActive(ctx: ChannelHandlerContext) {
                         super.channelActive(ctx)
@@ -206,7 +209,7 @@ open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInbou
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (relayChannel.isActive) {
             logger.debug(
-                "{} pipeline handlers:{}, write message:{}",
+                "id: {} pipeline handlers:{}, write message:{}",
                 relayChannel.id().asShortText(),
                 relayChannel.pipeline().names(),
                 msg.javaClass.name

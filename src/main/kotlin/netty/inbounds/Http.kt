@@ -3,8 +3,9 @@ package netty.inbounds
 
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
-import io.netty.handler.codec.http.*
-import io.netty.handler.stream.ChunkedWriteHandler
+import io.netty.handler.codec.http.HttpMethod
+import io.netty.handler.codec.http.HttpRequest
+import io.netty.handler.codec.http.HttpRequestEncoder
 import model.config.Inbound
 import mu.KotlinLogging
 import netty.outbounds.GalaxyOutbound
@@ -19,7 +20,6 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
     override fun channelRead(originCTX: ChannelHandlerContext, msg: Any) {
         //http proxy and http connect method
         if (msg is HttpRequest) {
-
             if (msg.method() == HttpMethod.CONNECT) {
                 tunnelProxy(originCTX, msg)
             } else {
@@ -47,13 +47,13 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                         uri.host,
                         port,
                         {
-                            it.pipeline().addLast(
-                                HttpResponseEncoder(),
-                                HttpRequestDecoder(),
-                                ChunkedWriteHandler(),
-                                HttpContentCompressor(),
-                                HttpServerCodec()
-                            ).newPromise().setSuccess()
+                            it.pipeline().addFirst(
+//                                HttpResponseDecoder(),
+//                                ChunkedWriteHandler(),
+//                                HttpContentCompressor(),
+                                HttpRequestEncoder(),
+                            )
+                            it.writeAndFlush(request)
                         },
                         {
                             originCTX.channel().newPromise().setSuccess()

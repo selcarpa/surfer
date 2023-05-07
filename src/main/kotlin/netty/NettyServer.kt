@@ -9,18 +9,18 @@ import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
-import io.netty.util.concurrent.Future
-import model.config.ConfigurationHolder
+import model.config.ConfigurationSettings.Companion.Configuration
 import mu.KotlinLogging
 import kotlin.system.exitProcess
 
 /**
  * netty服务端配置
  */
-class NettyServer  {
-    companion object{
+class NettyServer {
+    companion object {
         private val logger = KotlinLogging.logger {}
     }
+
     private val bossGroup: EventLoopGroup = NioEventLoopGroup()
     private val workerGroup: EventLoopGroup = NioEventLoopGroup()
     fun start() {
@@ -32,7 +32,7 @@ class NettyServer  {
             .childHandler(ProxyChannelInitializer())
             .option(ChannelOption.SO_BACKLOG, 65536)
             .childOption(ChannelOption.SO_KEEPALIVE, true)
-        ConfigurationHolder.configuration.inbounds.stream().forEach {
+        Configuration.inbounds.stream().forEach {
             bootstrap.bind(it.port).addListener { future ->
                 if (future.isSuccess) {
                     logger.info("bind ${it.port} success")

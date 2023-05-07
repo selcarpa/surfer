@@ -1,5 +1,5 @@
-
-import model.config.ConfigurationHolder
+import log.loadLogConfig
+import model.config.ConfigurationSettings.Companion.ConfigurationUrl
 import mu.KotlinLogging
 import netty.NettyServer
 
@@ -10,9 +10,12 @@ object MainKt {
     fun main(args: Array<String>) {
         args.forEach {
             if (it.startsWith("-c=")) {
-                ConfigurationHolder.configurationUrl = it.replace("-c=", "")
+                ConfigurationUrl = it.replace("-c=", "")
             }
         }
+
+        loadLogConfig()
+
         NettyServer().start()
         logger.info("『时间』会带来喜悦。")
     }
