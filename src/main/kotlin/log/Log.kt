@@ -8,7 +8,8 @@ import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.Appender
 import ch.qos.logback.core.ConsoleAppender
 import ch.qos.logback.core.rolling.RollingFileAppender
-import ch.qos.logback.core.rolling.TimeBasedRollingPolicy
+import ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy
+import ch.qos.logback.core.util.FileSize
 import model.config.ConfigurationSettings.Companion.Configuration
 import org.slf4j.LoggerFactory
 import java.nio.charset.StandardCharsets
@@ -16,55 +17,63 @@ import java.nio.charset.StandardCharsets
 
 fun loadLogConfig() {
 
+    // clear all appenders and present log instance
     val logCtx: LoggerContext = LoggerFactory.getILoggerFactory() as LoggerContext
+    val log = logCtx.getLogger(Logger.ROOT_LOGGER_NAME)
+    log.detachAndStopAllAppenders()
+    log.isAdditive = false
+
     val logConfiguration = Configuration.log
-    //if log configuration is null, use default configuration
-    if (logConfiguration == null || logConfiguration.fileName.isEmpty()) {
+    // set log level
+    log.level = (if (logConfiguration == null) Level.INFO else Level.toLevel(logConfiguration.level))
 
-        val logEncoder = PatternLayoutEncoder()
-        logEncoder.context = logCtx
-        logEncoder.pattern = logConfiguration?.pattern ?: "%date{ISO8601} %highlight(%level) [%t] %cyan(%logger{16}) %M: %msg%n"
-        logEncoder.charset = StandardCharsets.UTF_8
-        logEncoder.start()
-
-        val logConsoleAppender: ConsoleAppender<*> = ConsoleAppender<Any?>()
-        logConsoleAppender.context = logCtx
-        logConsoleAppender.name = "console"
-        logConsoleAppender.encoder = logEncoder
-        logConsoleAppender.start()
-
-        val log = logCtx.getLogger(Logger.ROOT_LOGGER_NAME)
-        log.detachAndStopAllAppenders()
-        log.isAdditive = false
-        log.level = (if (logConfiguration == null) Level.INFO else Level.toLevel(logConfiguration.level))
-        log.addAppender(logConsoleAppender as Appender<ILoggingEvent>)
-        return
-    }
-
+    // default console print
     val logEncoder = PatternLayoutEncoder()
     logEncoder.context = logCtx
-    logEncoder.pattern = logConfiguration.pattern
+    logEncoder.pattern =
+        logConfiguration?.pattern ?: "%date{ISO8601} %highlight(%level) [%t] %cyan(%logger{16}) %M: %msg%n"
+    logEncoder.charset = StandardCharsets.UTF_8
     logEncoder.start()
 
-    val logFileAppender: RollingFileAppender<*> = RollingFileAppender<Any?>()
-    logFileAppender.context = logCtx
-//    logFileAppender.name = "logFile"
-    logFileAppender.encoder = logEncoder
-    logFileAppender.isAppend = true
-    logFileAppender.file = logConfiguration.fileName
+    val logConsoleAppender: ConsoleAppender<*> = ConsoleAppender<Any?>()
+    logConsoleAppender.context = logCtx
+    logConsoleAppender.name = "console"
+    logConsoleAppender.encoder = logEncoder
+    logConsoleAppender.start()
 
-    val logFilePolicy: TimeBasedRollingPolicy<*> = TimeBasedRollingPolicy<Any?>()
-    logFilePolicy.context = logCtx
-    logFilePolicy.setParent(logFileAppender)
-    logFilePolicy.fileNamePattern = "logs/logfile-%d{yyyy-MM-dd_HH}.log"
-    logFilePolicy.maxHistory = logConfiguration.maxHistory
-    logFilePolicy.start()
+    log.addAppender(logConsoleAppender as Appender<ILoggingEvent>)
 
-    logFileAppender.rollingPolicy = logFilePolicy
-    logFileAppender.start()
 
-    val log: Logger = logCtx.getLogger(Logger.ROOT_LOGGER_NAME)
-    log.isAdditive = false
-    log.level = Level.toLevel(logConfiguration.level)
-    log.addAppender(logFileAppender as Appender<ILoggingEvent>)
+    //if log configuration is null, use default configuration
+    if (logConfiguration != null && logConfiguration.fileName.isNotEmpty()) {
+
+
+        val rollingFileAppender: RollingFileAppender<*> = RollingFileAppender<Any?>()
+
+        rollingFileAppender.context = logCtx
+        rollingFileAppender.name = "logFile"
+        rollingFileAppender.encoder = logEncoder
+        rollingFileAppender.isAppend = true
+        rollingFileAppender.file = "${logConfiguration.path}\\${logConfiguration.fileName}.log"
+
+        //init log rolling policy
+        val logFilePolicy: SizeAndTimeBasedRollingPolicy<*> = SizeAndTimeBasedRollingPolicy<Any?>()
+        logFilePolicy.context = logCtx
+        logFilePolicy.setParent(rollingFileAppender)
+        logFilePolicy.fileNamePattern = "${logConfiguration.path}/${logConfiguration.fileName}-%d{yyyy-MM-dd_HH}-%i.log.zip"
+        logFilePolicy.maxHistory = logConfiguration.maxHistory
+        logFilePolicy.setMaxFileSize(FileSize.valueOf("20mb"))
+        logFilePolicy.start()
+
+        rollingFileAppender.rollingPolicy = logFilePolicy
+        rollingFileAppender.start()
+
+        log.isAdditive = false
+        log.level = Level.toLevel(logConfiguration.level)
+        log.addAppender(rollingFileAppender as Appender<ILoggingEvent>)
+    }
+
+    //todo log context event listener not working
 }
+
+

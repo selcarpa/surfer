@@ -11,6 +11,7 @@ import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import model.config.ConfigurationSettings.Companion.Configuration
 import mu.KotlinLogging
+import java.util.*
 import kotlin.system.exitProcess
 
 /**
@@ -32,14 +33,16 @@ class NettyServer {
             .childHandler(ProxyChannelInitializer())
             .option(ChannelOption.SO_BACKLOG, 65536)
             .childOption(ChannelOption.SO_KEEPALIVE, true)
-        Configuration.inbounds.stream().forEach {
-            bootstrap.bind(it.port).addListener { future ->
-                if (future.isSuccess) {
-                    logger.info("bind ${it.port} success")
-                    Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
-                } else {
-                    logger.error("bind ${it.port} fail, reason:{}", future.cause().message)
-                    exitProcess(1)
+        Optional.ofNullable(Configuration.inbounds).ifPresent {
+            it.stream().forEach {
+                bootstrap.bind(it.port).addListener { future ->
+                    if (future.isSuccess) {
+                        logger.info("bind ${it.port} success")
+                        Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
+                    } else {
+                        logger.error("bind ${it.port} fail, reason:{}", future.cause().message)
+                        exitProcess(1)
+                    }
                 }
             }
         }

@@ -4,7 +4,7 @@ import com.google.gson.Gson
 import java.io.File
 
 data class ConfigurationSettings(
-    val inbounds: List<Inbound>, val outbounds: List<Outbound>, val log: LogConfiguration?
+    val log: LogConfiguration?, val inbounds: List<Inbound>, val outbounds: List<Outbound>,
 ) {
     companion object {
         var ConfigurationUrl: String? = null
@@ -46,7 +46,6 @@ data class LogConfiguration(
     var maxHistory: Int = 7,
     var fileName: String = "",
     var path: String? = "./logs/"
-) {
-}
+)
 
 open class ProxyProtocolSetting()
