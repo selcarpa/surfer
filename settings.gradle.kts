@@ -1,3 +1,3 @@
 
-rootProject.name = "easyP"
+rootProject.name = "surfer"
 

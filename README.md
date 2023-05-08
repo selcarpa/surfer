@@ -4,11 +4,23 @@ surfer
 
 The purpose is to use kotlin netty to implement some protocols supported by v2ray
 
-## compile environment
+## contribute
+
+### compile environment
 
 - jdk 11
 
-## config
+## quick start
+
+### run with arguments
+
+```shell
+java -jar surfer.jar -c=config.json
+```
+
+- -c=[config file path]
+
+### config
 
 ```json5
 {
