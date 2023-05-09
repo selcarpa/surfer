@@ -34,7 +34,11 @@ class GalaxyOutbound {
                     connectSuccess(outboundChannel).also { channelFuture ->
                         channelFuture.addListener(ChannelFutureListener {
                             if (!it.isSuccess) {
-                                logger.error("id: ${it.channel().id().asShortText()}, write fail, cause ", it.cause())
+                                logger.error(
+                                    "id: ${it.channel().id().asShortText()}, write fail, pipelines:{}, cause ",
+                                    it.channel().pipeline().names(),
+                                    it.cause()
+                                )
                                 return@ChannelFutureListener
                             }
                             outboundChannel.pipeline().addLast(

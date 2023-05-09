@@ -4,7 +4,9 @@ package netty
 import TrojanInboundHandler
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.nio.NioSocketChannel
-import io.netty.handler.codec.http.*
+import io.netty.handler.codec.http.HttpContentCompressor
+import io.netty.handler.codec.http.HttpObjectAggregator
+import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
 import io.netty.handler.stream.ChunkedWriteHandler
@@ -61,28 +63,28 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
     }
 
     private fun initHttpInbound(ch: NioSocketChannel, inbound: Inbound) {
-        // http proxy send a http response to client
-        ch.pipeline().addLast(HttpResponseEncoder())
-        // http proxy send a http request to server
-        ch.pipeline().addLast(HttpRequestDecoder())
-        ch.pipeline().addLast(ChunkedWriteHandler())
-        ch.pipeline().addLast(HttpObjectAggregator(10 * 1024 * 1024))
-        ch.pipeline().addLast(HttpContentCompressor())
-        ch.pipeline().addLast(HttpServerCodec())
-        ch.pipeline().addLast(HttpProxyServerHandler(inbound))
+        ch.pipeline().addLast(
+            ChunkedWriteHandler(),
+            HttpServerCodec(),
+            HttpContentCompressor(),
+            HttpObjectAggregator(Int.MAX_VALUE),
+            HttpProxyServerHandler(inbound)
+        )
     }
 
     private fun initTrojanInbound(ch: NioSocketChannel, inbound: Inbound) {
         when (inbound.inboundStreamBy!!.type) {
             "ws" -> {
-                ch.pipeline().addLast(HttpServerCodec())
-                ch.pipeline().addLast(ChunkedWriteHandler())
-                ch.pipeline().addLast(HttpObjectAggregator(65536))
-                ch.pipeline().addLast(IdleStateHandler(60, 60, 60))
-                ch.pipeline().addLast(WebSocketServerProtocolHandler(inbound.inboundStreamBy.wsInboundSettings[0].path))
-                ch.pipeline().addLast(WebsocketInboundHandler { ctx, _ ->
-                    ctx.pipeline().addLast(TrojanInboundHandler(inbound))
-                })
+                ch.pipeline().addLast(
+                    ChunkedWriteHandler(),
+                    HttpServerCodec(),
+                    HttpObjectAggregator(Int.MAX_VALUE),
+                    IdleStateHandler(60, 60, 60),
+                    WebSocketServerProtocolHandler(inbound.inboundStreamBy.wsInboundSettings[0].path),
+                    //todo solve sub-protocol
+                    WebsocketInboundHandler { ctx, _ ->
+                        ctx.pipeline().addLast(TrojanInboundHandler(inbound))
+                    })
             }
         }
 

@@ -14,6 +14,7 @@ import io.netty.handler.codec.http.HttpClientCodec
 import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.websocketx.*
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
+import io.netty.handler.logging.ByteBufFormat
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.ssl.SslContext
@@ -37,9 +38,7 @@ class Surfer {
         private val logger = KotlinLogging.logger {}
 
         fun outbound(
-            outbound: Outbound,
-            connectListener: FutureListener<Channel>,
-            socketAddress: InetSocketAddress? = null
+            outbound: Outbound, connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress? = null
         ) {
             if (outbound.outboundStreamBy == null) {
                 return galaxy(connectListener, socketAddress!!)
@@ -60,9 +59,8 @@ class Surfer {
             val eventLoop = NioEventLoopGroup()
             val promise = eventLoop.next().newPromise<Channel>()
             promise.addListener(connectListener)
-            b.group(eventLoop).channel(NioSocketChannel::class.java)
-                .option(ChannelOption.TCP_NODELAY, true)
-                .handler(LoggingHandler(LogLevel.DEBUG))
+            b.group(eventLoop).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
+                .handler(LoggingHandler("galaxy logger", LogLevel.DEBUG, ByteBufFormat.HEX_DUMP))
                 .handler(object : ChannelInboundHandlerAdapter() {
                     override fun channelActive(ctx: ChannelHandlerContext) {
                         super.channelActive(ctx)
@@ -70,11 +68,12 @@ class Surfer {
                     }
 
                     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-                        logger.debug {
-                            "id: ${
-                                ctx.channel().id().asShortText()
-                            }, galaxy read ${msg}, piplines: ${ctx.channel().pipeline().names()}"
-                        }
+                        logger.debug(
+                            "id: {}, galaxy read {}, pipelines: {}",
+                            ctx.channel().id().asShortText(),
+                            msg,
+                            ctx.channel().pipeline().names()
+                        )
                         super.channelRead(ctx, msg)
                     }
                 })
