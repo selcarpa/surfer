@@ -31,29 +31,10 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
 
     public override fun channelRead0(ctx: ChannelHandlerContext, socksRequest: SocksMessage) {
         when (socksRequest.version()!!) {
-            SocksVersion.SOCKS4a -> socks4Connect(ctx, socksRequest)
             SocksVersion.SOCKS5 -> socks5Connect(ctx, socksRequest)
-            SocksVersion.UNKNOWN -> ctx.close()
-        }
-    }
-
-    /**
-     * socks4 connect
-     */
-    private fun socks4Connect(
-        ctx: ChannelHandlerContext, socksRequest: SocksMessage
-    ) {
-        if (inbound.protocol != "socks4" && inbound.protocol != "socks4a") {
-            ctx.close()
-            return
-        }
-        val socksV4CmdRequest = socksRequest as Socks4CommandRequest
-        if (socksV4CmdRequest.type() === Socks4CommandType.CONNECT) {
-            ctx.pipeline().addLast(SocksServerConnectHandler(inbound))
-            ctx.pipeline().remove(this)
-            ctx.fireChannelRead(socksRequest)
-        } else {
-            ctx.close()
+            else->{
+                ctx.close()
+            }
         }
     }
 
@@ -143,7 +124,6 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
 
     public override fun channelRead0(originCTX: ChannelHandlerContext, message: SocksMessage?) {
         when (message) {
-            is Socks4CommandRequest -> socks4Command(originCTX, message)
             is Socks5CommandRequest -> socks5Command(originCTX, message)
             else -> {
                 originCTX.close()
@@ -230,51 +210,6 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
         }
 
     }
-
-    private fun socks4Command(
-        originCTX: ChannelHandlerContext, message: Socks4CommandRequest
-    ) {
-        val promise = originCTX.executor().newPromise<Channel>()
-        promise.addListener(object : FutureListener<Channel?> {
-            override fun operationComplete(future: Future<Channel?>) {
-                val outboundChannel = future.now
-                if (future.isSuccess) {
-                    val responseFuture = originCTX.channel().writeAndFlush(
-                        DefaultSocks4CommandResponse(Socks4CommandStatus.SUCCESS)
-                    )
-                    responseFuture.addListener(ChannelFutureListener {
-                        originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                        outboundChannel?.pipeline()?.addLast(RelayInboundHandler(originCTX.channel()))
-                        originCTX.pipeline().addLast(outboundChannel?.let { it1 -> RelayInboundHandler(it1) })
-                    })
-                } else {
-                    originCTX.channel().writeAndFlush(
-                        DefaultSocks4CommandResponse(Socks4CommandStatus.REJECTED_OR_FAILED)
-                    )
-                    ChannelUtils.closeOnFlush(originCTX.channel())
-                }
-            }
-        })
-        val inboundChannel = originCTX.channel()
-//        b.group(inboundChannel.eventLoop()).channel(NioSocketChannel::class.java)
-//            .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 10000).option(ChannelOption.SO_KEEPALIVE, true)
-//            .handler(PromiseHandler(promise))
-//        b.connect(message.dstAddr(), message.dstPort()).addListener(object : ChannelFutureListener {
-//            @Throws(Exception::class)
-//            override fun operationComplete(future: ChannelFuture) {
-//                if (future.isSuccess) {
-//                    // Connection established use handler provided results
-//                } else {
-//                    // Close the connection if the connection attempt has failed.
-//                    originCTX.channel().writeAndFlush(
-//                        DefaultSocks4CommandResponse(Socks4CommandStatus.REJECTED_OR_FAILED)
-//                    )
-//                    ChannelUtils.closeOnFlush(originCTX.channel())
-//                }
-//            }
-//        })
-    }
-
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         logger.error(cause.message, cause)

@@ -41,7 +41,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
                     return
                 }
 
-                "socks5", "socks4", "socks4a" -> {
+                "socks5" -> {
                     initSocksInbound(ch, inbound)
                     return
                 }
