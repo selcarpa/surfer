@@ -5,10 +5,10 @@ import model.config.Inbound
 import model.config.Outbound
 import java.util.*
 
-/**
- * todo implement it
- */
-object EasyPUtils {
+object SurferUtils {
+    /**
+     * todo implement it
+     */
     fun resolveOutbound(inbound: Inbound): Optional<Outbound> {
         return Configuration.outbounds.stream().filter { true }.findFirst()
     }

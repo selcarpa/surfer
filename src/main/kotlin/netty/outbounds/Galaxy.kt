@@ -30,12 +30,14 @@ class GalaxyOutbound {
             val connectListener = FutureListener<Channel> { future ->
                 val outboundChannel = future.now
                 if (future.isSuccess) {
-                    logger.debug { "outbound to $host:$port success" }
+                    logger.debug { "galaxy outbound to $host:$port success" }
                     connectSuccess(outboundChannel).also { channelFuture ->
                         channelFuture.addListener(ChannelFutureListener {
                             if (!it.isSuccess) {
                                 logger.error(
-                                    "id: ${it.channel().id().asShortText()}, write fail, pipelines:{}, cause ",
+                                    "galaxy outbound fail, id: ${
+                                        it.channel().id().asShortText()
+                                    }, write fail, pipelines:{}, cause ",
                                     it.channel().pipeline().names(),
                                     it.cause()
                                 )
@@ -44,9 +46,14 @@ class GalaxyOutbound {
                             outboundChannel.pipeline().addLast(
                                 RelayInboundHandler(originCTX.channel()),
                             )
-                            originCTX.pipeline().addLast(
+                            originCTX.pipeline().addFirst(
                                 RelayInboundHandler(outboundChannel),
                             )
+                            logger.debug {
+                                "galaxy relay established, origin id: ${
+                                    originCTX.channel().id().asShortText()
+                                }, pipelines: ${originCTX.channel().pipeline().names()}"
+                            }
                         })
                     }
                 } else {

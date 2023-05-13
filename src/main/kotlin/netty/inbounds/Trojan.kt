@@ -1,4 +1,5 @@
 import io.netty.buffer.ByteBuf
+import io.netty.buffer.ByteBufUtil
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.handler.codec.socksx.v5.DefaultSocks5CommandResponse
@@ -9,8 +10,8 @@ import model.protocol.TrojanPackage
 import mu.KotlinLogging
 import netty.outbounds.GalaxyOutbound
 import utils.ChannelUtils
-import utils.EasyPUtils
 import utils.Sha224Utils
+import utils.SurferUtils
 
 class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<ByteBuf>() {
     companion object {
@@ -21,49 +22,52 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
         //parse trojan package
         val trojanPackage = TrojanPackage.parse(msg)
 
-        inbound.trojanSettings!!.stream()
-            .filter { Sha224Utils.encryptAndHex(it.password) == trojanPackage.hexSha224Password }.findFirst()
-            .ifPresent {
-                logger.debug { "id: ${originCTX.channel().id().asShortText()}, accept trojan inbound" }
-                EasyPUtils.resolveOutbound(inbound).ifPresent { outbound ->
-                    when (outbound.protocol) {
-                        "galaxy" -> {
-                            GalaxyOutbound.outbound(
-                                originCTX,
-                                outbound,
-                                trojanPackage.request.host,
-                                trojanPackage.request.port,
-                                {
-                                    originCTX.newPromise().setSuccess()
-                                },
-                                {
-                                    //while connect failed, write failure response to client, and close the connection
-                                    originCTX.channel().writeAndFlush(
-                                        DefaultSocks5CommandResponse(
-                                            Socks5CommandStatus.FAILURE,
-                                            Socks5AddressType.valueOf(trojanPackage.request.atyp)
-                                        )
+        val trojanSetting = inbound.trojanSettings!!.stream().filter {
+            ByteBufUtil.hexDump(
+                Sha224Utils.encryptAndHex(it.password).toByteArray()
+            ) == trojanPackage.hexSha224Password
+        }.findFirst()
+        if (trojanSetting.isPresent) {
+            logger.debug { "id: ${originCTX.channel().id().asShortText()}, accept trojan inbound" }
+            SurferUtils.resolveOutbound(inbound).ifPresent { outbound ->
+                when (outbound.protocol) {
+                    "galaxy" -> {
+                        GalaxyOutbound.outbound(originCTX,
+                            outbound,
+                            trojanPackage.request.host,
+                            trojanPackage.request.port,
+                            {
+                                originCTX.newPromise().setSuccess()
+                            },
+                            {
+                                //while connect failed, write failure response to client, and close the connection
+                                originCTX.channel().writeAndFlush(
+                                    DefaultSocks5CommandResponse(
+                                        Socks5CommandStatus.FAILURE,
+                                        Socks5AddressType.valueOf(trojanPackage.request.atyp)
                                     )
-                                    ChannelUtils.closeOnFlush(originCTX.channel())
-                                })
-                        }
+                                )
+                                ChannelUtils.closeOnFlush(originCTX.channel())
+                            })
+                    }
 
-                        "trojan" -> {
-                            TODO("Not yet implemented")
-                        }
+                    "trojan" -> {
+                        TODO("Not yet implemented")
+                    }
 
-                        else -> {
-                            logger.error(
-                                "id: ${
-                                    originCTX.channel().id().asShortText()
-                                }, protocol=${outbound.protocol} not support"
-                            )
-                        }
+                    else -> {
+                        logger.error(
+                            "id: ${
+                                originCTX.channel().id().asShortText()
+                            }, protocol=${outbound.protocol} not support"
+                        )
                     }
                 }
-
             }
-        logger.warn { "id: ${originCTX.channel().id().asShortText()}, drop trojan package, no password matched" }
+        } else {
+            logger.warn { "id: ${originCTX.channel().id().asShortText()}, drop trojan package, no password matched" }
+
+        }
     }
 
 

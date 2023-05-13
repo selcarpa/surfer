@@ -1,27 +1,19 @@
 package netty.inbounds
 
 
-import io.netty.channel.Channel
 import io.netty.channel.ChannelFutureListener
 import io.netty.channel.ChannelHandler.Sharable
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.handler.codec.socksx.SocksMessage
 import io.netty.handler.codec.socksx.SocksVersion
-import io.netty.handler.codec.socksx.v4.DefaultSocks4CommandResponse
-import io.netty.handler.codec.socksx.v4.Socks4CommandRequest
-import io.netty.handler.codec.socksx.v4.Socks4CommandStatus
-import io.netty.handler.codec.socksx.v4.Socks4CommandType
 import io.netty.handler.codec.socksx.v5.*
-import io.netty.util.concurrent.Future
-import io.netty.util.concurrent.FutureListener
 import model.config.Inbound
 import mu.KotlinLogging
 import netty.outbounds.GalaxyOutbound
 import netty.outbounds.Trojan
-import netty.stream.RelayInboundHandler
 import utils.ChannelUtils
-import utils.EasyPUtils.resolveOutbound
+import utils.SurferUtils.resolveOutbound
 
 @Sharable
 class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {

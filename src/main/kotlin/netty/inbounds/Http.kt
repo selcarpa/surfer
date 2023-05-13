@@ -8,7 +8,7 @@ import io.netty.handler.stream.ChunkedWriteHandler
 import model.config.Inbound
 import mu.KotlinLogging
 import netty.outbounds.GalaxyOutbound
-import utils.EasyPUtils
+import utils.SurferUtils
 import java.net.URI
 
 class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandlerAdapter() {
@@ -19,6 +19,12 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
     override fun channelRead(originCTX: ChannelHandlerContext, msg: Any) {
         //http proxy and http connect method
         if (msg is HttpRequest) {
+            logger.debug(
+                "http inbound: id: {}, method: {}, uri: {}",
+                originCTX.channel().id().asShortText(),
+                msg.method(),
+                msg.uri()
+            )
             if (msg.method() == HttpMethod.CONNECT) {
                 tunnelProxy(originCTX, msg)
             } else {
@@ -31,12 +37,13 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
 
     private fun httpProxy(originCTX: ChannelHandlerContext, request: HttpRequest) {
         val uri = URI(request.uri())
-        val resolveOutbound = EasyPUtils.resolveOutbound(inbound)
+        val resolveOutbound = SurferUtils.resolveOutbound(inbound)
 
         val port = when (uri.port) {
             -1 -> 80;
             else -> uri.port
         }
+        logger.debug("http proxy outbound from {}, content: {}", originCTX.channel().id().asShortText(), request)
         resolveOutbound.ifPresent { outbound ->
             when (outbound.protocol) {
                 "galaxy" -> {
@@ -49,7 +56,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                         )
                         it.writeAndFlush(request)
                     }, {
-                        originCTX.channel().newPromise().setSuccess()
+                        originCTX.close()
                     })
                 }
 
@@ -77,7 +84,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                 "https://${request.uri()}"
             }
         )
-        val resolveOutbound = EasyPUtils.resolveOutbound(inbound)
+        val resolveOutbound = SurferUtils.resolveOutbound(inbound)
 
         val port = when (uri.port) {
             -1 -> 443;
@@ -93,11 +100,10 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                                 request.protocolVersion(),
                                 HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
                             )
-                        ).addListener {
-                            originCTX.channel().pipeline().removeAll { true }
-                        }
+                        )
                     }, {
-                        originCTX.channel().newPromise().setSuccess()
+                        //todo: When the remote cannot be connected, the origin needs to be notified correctly
+                        logger.warn { "from id: ${originCTX.channel().id().asShortText()}, connect to remote fail" }
                     })
                 }
 

@@ -38,10 +38,13 @@ class Surfer {
         private val logger = KotlinLogging.logger {}
 
         fun outbound(
-            outbound: Outbound, connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress? = null
+            outbound: Outbound,
+            connectListener: FutureListener<Channel>,
+            socketAddress: InetSocketAddress? = null,
+            eventLoopGroup: NioEventLoopGroup = NioEventLoopGroup()
         ) {
             if (outbound.outboundStreamBy == null) {
-                return galaxy(connectListener, socketAddress!!)
+                return galaxy(connectListener, socketAddress!!, eventLoopGroup)
             }
             return when (outbound.outboundStreamBy.type) {
                 "ws", "wss" -> wsStream(
@@ -54,12 +57,15 @@ class Surfer {
             }
         }
 
-        private fun galaxy(connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress) {
+        private fun galaxy(
+            connectListener: FutureListener<Channel>,
+            socketAddress: InetSocketAddress,
+            eventLoopGroup: NioEventLoopGroup
+        ) {
             val b = Bootstrap()
-            val eventLoop = NioEventLoopGroup()
-            val promise = eventLoop.next().newPromise<Channel>()
+            val promise = eventLoopGroup.next().newPromise<Channel>()
             promise.addListener(connectListener)
-            b.group(eventLoop).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
+            b.group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
                 .handler(LoggingHandler("galaxy logger", LogLevel.DEBUG, ByteBufFormat.HEX_DUMP))
                 .handler(object : ChannelInboundHandlerAdapter() {
                     override fun channelActive(ctx: ChannelHandlerContext) {
@@ -241,6 +247,9 @@ open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInbou
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
         if (relayChannel.isActive) {
+            logger.debug(
+                "id: {}  close channel, write close to relay channel", relayChannel.id().asShortText()
+            )
             ChannelUtils.closeOnFlush(relayChannel)
         }
     }
