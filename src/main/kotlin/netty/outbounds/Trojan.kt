@@ -38,10 +38,7 @@ object Trojan {
                         originCTX.pipeline().addLast(
                             TrojanRelayInboundHandler(
                                 outboundChannel, outbound.trojanSetting!!, TrojanRequest(
-                                    Socks5CommandType.CONNECT.byteValue(),
-                                    destAddrType,
-                                    destAddr,
-                                    destPort
+                                    Socks5CommandType.CONNECT.byteValue(), destAddrType, destAddr, destPort
                                 )
                             ),
                         )
@@ -52,7 +49,7 @@ object Trojan {
             }
         }
         Surfer.outbound(
-            outbound = outbound, connectListener = connectListener
+            outbound = outbound, connectListener = connectListener, eventLoopGroup = originCTX.channel().eventLoop()
         )
     }
 }
@@ -75,8 +72,7 @@ class TrojanOutboundHandler : ChannelOutboundHandlerAdapter() {
                             logger.error(
                                 "write message:${msg.javaClass.name} to ${
                                     ctx.channel().id().asShortText()
-                                } failed ${ctx.channel().pipeline().names()}",
-                                it.cause()
+                                } failed ${ctx.channel().pipeline().names()}", it.cause()
                             )
                         }
                     }
@@ -88,12 +84,6 @@ class TrojanOutboundHandler : ChannelOutboundHandlerAdapter() {
             }
         }
     }
-}
-
-private fun ByteBuf.writeBytes(byteValue: Byte) {
-    val bytes = ByteArray(1)
-    bytes[0] = byteValue
-    this.writeBytes(bytes)
 }
 
 class TrojanRelayInboundHandler(

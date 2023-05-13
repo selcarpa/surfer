@@ -15,7 +15,7 @@ import java.util.*
 import kotlin.system.exitProcess
 
 /**
- * netty服务端配置
+ * netty server runner
  */
 class NettyServer {
     companion object {
@@ -34,13 +34,13 @@ class NettyServer {
             .option(ChannelOption.SO_BACKLOG, 65536)
             .childOption(ChannelOption.SO_KEEPALIVE, true)
         Optional.ofNullable(Configuration.inbounds).ifPresent {
-            it.stream().forEach {
-                bootstrap.bind(it.port).addListener { future ->
+            it.stream().forEach { inbound ->
+                bootstrap.bind(inbound.port).addListener { future ->
                     if (future.isSuccess) {
-                        logger.info("bind ${it.port} success")
+                        logger.info("bind ${inbound.port} success")
                         Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
                     } else {
-                        logger.error("bind ${it.port} fail, reason:{}", future.cause().message)
+                        logger.error("bind ${inbound.port} fail, reason:{}", future.cause().message)
                         exitProcess(1)
                     }
                 }

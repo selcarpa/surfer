@@ -19,7 +19,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
     override fun channelRead(originCTX: ChannelHandlerContext, msg: Any) {
         //http proxy and http connect method
         if (msg is HttpRequest) {
-            logger.debug(
+            logger.info(
                 "http inbound: id: {}, method: {}, uri: {}",
                 originCTX.channel().id().asShortText(),
                 msg.method(),
@@ -94,13 +94,19 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
             when (outbound.protocol) {
                 "galaxy" -> {
                     GalaxyOutbound.outbound(originCTX, outbound, uri.host, port, {
-                        //write Connection Established and remove all listener
+                        //write Connection Established
                         originCTX.writeAndFlush(
                             DefaultHttpResponse(
                                 request.protocolVersion(),
                                 HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
                             )
-                        )
+                        ).also {
+                            //remove all listener
+                            val pipeline = originCTX.pipeline()
+                            while (pipeline.first() != null) {
+                                pipeline.removeFirst()
+                            }
+                        }
                     }, {
                         //todo: When the remote cannot be connected, the origin needs to be notified correctly
                         logger.warn { "from id: ${originCTX.channel().id().asShortText()}, connect to remote fail" }

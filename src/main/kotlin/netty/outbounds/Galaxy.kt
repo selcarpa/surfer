@@ -37,16 +37,14 @@ class GalaxyOutbound {
                                 logger.error(
                                     "galaxy outbound fail, id: ${
                                         it.channel().id().asShortText()
-                                    }, write fail, pipelines:{}, cause ",
-                                    it.channel().pipeline().names(),
-                                    it.cause()
+                                    }, write fail, pipelines:{}, cause ", it.channel().pipeline().names(), it.cause()
                                 )
                                 return@ChannelFutureListener
                             }
                             outboundChannel.pipeline().addLast(
                                 RelayInboundHandler(originCTX.channel()),
                             )
-                            originCTX.pipeline().addFirst(
+                            originCTX.pipeline().addLast(
                                 RelayInboundHandler(outboundChannel),
                             )
                             logger.debug {
@@ -61,7 +59,7 @@ class GalaxyOutbound {
                 }
             }
             Surfer.outbound(
-                outbound, connectListener, InetSocketAddress(host, port)
+                outbound, connectListener, InetSocketAddress(host, port), originCTX.channel().eventLoop()
             )
 
         }

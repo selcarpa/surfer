@@ -2,7 +2,6 @@ package netty.stream
 
 
 import io.netty.bootstrap.Bootstrap
-import io.netty.buffer.ByteBufUtil
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
@@ -41,14 +40,17 @@ class Surfer {
             outbound: Outbound,
             connectListener: FutureListener<Channel>,
             socketAddress: InetSocketAddress? = null,
-            eventLoopGroup: NioEventLoopGroup = NioEventLoopGroup()
+            eventLoopGroup: EventLoopGroup = NioEventLoopGroup()
         ) {
             if (outbound.outboundStreamBy == null) {
                 return galaxy(connectListener, socketAddress!!, eventLoopGroup)
             }
             return when (outbound.outboundStreamBy.type) {
                 "ws", "wss" -> wsStream(
-                    connectListener, outbound.outboundStreamBy.wsOutboundSettings[0], outbound.outboundStreamBy.type
+                    connectListener,
+                    outbound.outboundStreamBy.wsOutboundSettings[0],
+                    outbound.outboundStreamBy.type,
+                    eventLoopGroup
                 )
 
                 else -> {
@@ -58,9 +60,7 @@ class Surfer {
         }
 
         private fun galaxy(
-            connectListener: FutureListener<Channel>,
-            socketAddress: InetSocketAddress,
-            eventLoopGroup: NioEventLoopGroup
+            connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress, eventLoopGroup: EventLoopGroup
         ) {
             val b = Bootstrap()
             val promise = eventLoopGroup.next().newPromise<Channel>()
@@ -83,15 +83,17 @@ class Surfer {
                         super.channelRead(ctx, msg)
                     }
                 })
-            b.connect(socketAddress).sync()
+            b.connect(socketAddress)
         }
 
         private fun wsStream(
-            connectListener: FutureListener<Channel>, wsOutboundSetting: WsOutboundSetting, type: String
+            connectListener: FutureListener<Channel>,
+            wsOutboundSetting: WsOutboundSetting,
+            type: String,
+            eventLoopGroup: EventLoopGroup
         ) {
             val b = Bootstrap()
-            val eventLoop = NioEventLoopGroup()
-            val promise = eventLoop.next().newPromise<Channel>()
+            val promise = eventLoopGroup.next().newPromise<Channel>()
             promise.addListener(connectListener)
 
             val uri = URI("${type}://${wsOutboundSetting.host}:${wsOutboundSetting.port}${wsOutboundSetting.path}")
@@ -124,7 +126,7 @@ class Surfer {
                 ), promise
             )
 
-            b.group(eventLoop).channel(NioSocketChannel::class.java)
+            b.group(eventLoopGroup).channel(NioSocketChannel::class.java)
                 .handler(object : ChannelInitializer<SocketChannel>() {
                     override fun initChannel(ch: SocketChannel) {
                         if (sslCtx != null) {
@@ -141,7 +143,7 @@ class Surfer {
                     }
 
                 })
-            b.connect(uri.host, port).sync()
+            b.connect(uri.host, port)
 
         }
     }
@@ -169,8 +171,7 @@ class WebSocketClientHandler(
         if (!handshaker.isHandshakeComplete) {
             try {
                 handshaker.finishHandshake(ch, msg as FullHttpResponse?)
-                logger.debug("${ctx.channel().id().asShortText()} WebSocket Client connected!")
-//                ctx.channel().pipeline().remove(this)
+                logger.debug("id: ${ctx.channel().id().asShortText()} WebSocket Client connected!")
                 connectPromise.setSuccess(ctx.channel())
             } catch (e: WebSocketHandshakeException) {
                 logger.debug("WebSocket Client failed to connect")
@@ -178,33 +179,44 @@ class WebSocketClientHandler(
             }
             return
         }
-        if (msg is FullHttpResponse) {
-            throw IllegalStateException(
-                "Unexpected FullHttpResponse (getStatus=" + msg.status() + ", content=" + msg.content()
-                    .toString(CharsetUtil.UTF_8) + ')'
-            )
-        }
-        when (val frame = msg as WebSocketFrame?) {
+        when (msg) {
+            is FullHttpResponse -> {
+                throw IllegalStateException(
+                    "Unexpected FullHttpResponse (getStatus=" + msg.status() + ", content=" + msg.content()
+                        .toString(CharsetUtil.UTF_8) + ')'
+                )
+            }
+
             is TextWebSocketFrame -> {
-                logger.debug("WebSocket Client received message: " + frame.text())
-                ctx.fireChannelRead(frame)
+                logger.debug(
+                    "id: ${
+                        ctx.channel().id().asShortText()
+                    }, WebSocket Client received message: " + msg.text()
+                )
+                ctx.fireChannelRead(msg)
             }
 
             is PongWebSocketFrame -> {
-                logger.debug("WebSocket Client received pong")
+                logger.debug("id: ${ctx.channel().id().asShortText()}, WebSocket Client received pong")
             }
 
             is CloseWebSocketFrame -> {
-                logger.debug("WebSocket Client received closing")
+                logger.debug("id: ${ctx.channel().id().asShortText()}, WebSocket Client received closing")
                 ch.close()
             }
 
             is BinaryWebSocketFrame -> {
-                val content = frame.content()
-                logger.debug("WebSocket Client received binary:${ByteBufUtil.hexDump(content.array())}")
-                ctx.fireChannelRead(content)
+                logger.debug(
+                    "id: ${
+                        ctx.channel().id().asShortText()
+                    }, WebSocket Client receive message:{}, pipeline handlers:{}",
+                    msg.javaClass.name,
+                    ctx.pipeline().names()
+                )
+                ctx.fireChannelRead(msg.content())
             }
         }
+
     }
 }
 
@@ -228,17 +240,14 @@ open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInbou
                 relayChannel.pipeline().names(),
                 msg.javaClass.name
             )
-            relayChannel.writeAndFlush(msg).addListener {
-                FutureListener<Void> {
-                    if (!it.isSuccess) {
-                        logger.error(
-                            "write message:${msg.javaClass.name} to ${relayChannel.id().asShortText()} failed",
-                            it.cause()
-                        )
-                        logger.error(it.cause().message, it.cause())
-                    }
+            relayChannel.writeAndFlush(msg).addListener(ChannelFutureListener {
+                if (!it.isSuccess) {
+                    logger.error(
+                        "write message:${msg.javaClass.name} to ${relayChannel.id().asShortText()} failed", it.cause()
+                    )
+                    logger.error(it.cause().message, it.cause())
                 }
-            }
+            })
         } else {
             logger.error("relay channel is not active, close message:${msg.javaClass.name}")
             ReferenceCountUtil.release(msg)
@@ -256,7 +265,11 @@ open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInbou
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        logger.error(cause.message, cause)
+        logger.error(
+            "relay inbound handler exception caught, id: ${ctx.channel().id()}, pipeline: ${
+                ctx.channel().pipeline().names()
+            }, message: ${cause.message}", cause
+        )
         ctx.close()
     }
 }

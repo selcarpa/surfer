@@ -24,7 +24,7 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
     public override fun channelRead0(ctx: ChannelHandlerContext, socksRequest: SocksMessage) {
         when (socksRequest.version()!!) {
             SocksVersion.SOCKS5 -> socks5Connect(ctx, socksRequest)
-            else->{
+            else -> {
                 ctx.close()
             }
         }
@@ -130,6 +130,12 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
         originCTX: ChannelHandlerContext, message: Socks5CommandRequest
     ) {
         val resolveOutbound = resolveOutbound(inbound)
+        logger.info(
+            "socks5 inbound: id: {}, method: {}, uri: {}",
+            originCTX.channel().id().asShortText(),
+            message.dstAddr(),
+            message.dstPort()
+        )
         resolveOutbound.ifPresent { outbound ->
             when (outbound.protocol) {
                 "galaxy" -> {
@@ -202,6 +208,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
         }
 
     }
+
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         logger.error(cause.message, cause)
