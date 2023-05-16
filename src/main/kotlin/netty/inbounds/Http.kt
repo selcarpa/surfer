@@ -40,7 +40,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
         val resolveOutbound = SurferUtils.resolveOutbound(inbound)
 
         val port = when (uri.port) {
-            -1 -> 80;
+            -1 -> 80
             else -> uri.port
         }
         logger.debug("http proxy outbound from {}, content: {}", originCTX.channel().id().asShortText(), request)
@@ -79,7 +79,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
     private fun tunnelProxy(originCTX: ChannelHandlerContext, request: HttpRequest) {
         val uri = URI(
             if (request.uri().startsWith("https://")) {
-                request.uri();
+                request.uri()
             } else {
                 "https://${request.uri()}"
             }
@@ -87,7 +87,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
         val resolveOutbound = SurferUtils.resolveOutbound(inbound)
 
         val port = when (uri.port) {
-            -1 -> 443;
+            -1 -> 443
             else -> uri.port
         }
         resolveOutbound.ifPresent { outbound ->
