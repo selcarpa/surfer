@@ -139,36 +139,30 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
         resolveOutbound.ifPresent { outbound ->
             when (outbound.protocol) {
                 "galaxy" -> {
-                    GalaxyOutbound.outbound(
-                        originCTX,
-                        outbound,
-                        message.dstAddr(),
-                        message.dstPort(),
-                        {
-                            originCTX.channel().writeAndFlush(
-                                DefaultSocks5CommandResponse(
-                                    Socks5CommandStatus.SUCCESS,
-                                    message.dstAddrType(),
-                                    message.dstAddr(),
-                                    message.dstPort()
-                                )
+                    GalaxyOutbound.outbound(originCTX, outbound, message.dstAddr(), message.dstPort(), {
+                        originCTX.channel().writeAndFlush(
+                            DefaultSocks5CommandResponse(
+                                Socks5CommandStatus.SUCCESS,
+                                message.dstAddrType(),
+                                message.dstAddr(),
+                                message.dstPort()
                             )
-                        },
-                        {
-                            //while connect failed, write failure response to client, and close the connection
-                            originCTX.channel().writeAndFlush(
-                                DefaultSocks5CommandResponse(
-                                    Socks5CommandStatus.FAILURE, message.dstAddrType()
-                                )
+                        ).addListener(ChannelFutureListener {
+                            originCTX.pipeline().remove(this@SocksServerConnectHandler)
+                        })
+                    }, {
+                        //while connect failed, write failure response to client, and close the connection
+                        originCTX.channel().writeAndFlush(
+                            DefaultSocks5CommandResponse(
+                                Socks5CommandStatus.FAILURE, message.dstAddrType()
                             )
-                            ChannelUtils.closeOnFlush(originCTX.channel())
-                        }
-                    )
+                        )
+                        ChannelUtils.closeOnFlush(originCTX.channel())
+                    })
                 }
 
                 "trojan" -> {
-                    Trojan.outbound(
-                        originCTX,
+                    Trojan.outbound(originCTX,
                         outbound,
                         message.dstAddrType().byteValue(),
                         message.dstAddr(),
@@ -182,7 +176,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                                     message.dstPort()
                                 )
                             ).addListener(ChannelFutureListener {
-//                                originCTX.pipeline().remove(this@SocksServerConnectHandler)
+                                originCTX.pipeline().remove(this@SocksServerConnectHandler)
                             })
                         },
                         {

@@ -235,7 +235,9 @@ open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInbou
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (relayChannel.isActive) {
             logger.debug(
-                "id: {} pipeline handlers:{}, write message:{}",
+                "relay inbound read from id: {} pipeline handlers:{}, to id: {} pipeline handlers:{}, write message:{}",
+                ctx.channel().id().asShortText(),
+                ctx.channel().pipeline().names(),
                 relayChannel.id().asShortText(),
                 relayChannel.pipeline().names(),
                 msg.javaClass.name
@@ -243,7 +245,9 @@ open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInbou
             relayChannel.writeAndFlush(msg).addListener(ChannelFutureListener {
                 if (!it.isSuccess) {
                     logger.error(
-                        "write message:${msg.javaClass.name} to ${relayChannel.id().asShortText()} failed", it.cause()
+                        "relay inbound write message:${msg.javaClass.name} to id: ${
+                            relayChannel.id().asShortText()
+                        } failed", it.cause()
                     )
                     logger.error(it.cause().message, it.cause())
                 }
