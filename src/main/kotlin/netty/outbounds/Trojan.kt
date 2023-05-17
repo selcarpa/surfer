@@ -24,13 +24,13 @@ object Trojan {
         destAddrType: Byte,
         destAddr: String,
         destPort: Int,
-        connectSuccess: () -> ChannelFuture,
+        connectSuccess: (Channel) -> ChannelFuture,
         connectFail: () -> Unit
     ) {
         val connectListener = FutureListener<Channel> { future ->
             val outboundChannel = future.now
             if (future.isSuccess) {
-                connectSuccess().also { channelFuture ->
+                connectSuccess(outboundChannel).also { channelFuture ->
                     channelFuture.addListener(ChannelFutureListener {
                         outboundChannel.pipeline().addLast(
                             TrojanOutboundHandler(), RelayInboundHandler(originCTX.channel()),

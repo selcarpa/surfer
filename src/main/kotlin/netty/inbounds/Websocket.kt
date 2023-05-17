@@ -1,15 +1,18 @@
 package netty.inbounds
 
 
+import io.netty.buffer.ByteBuf
+import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInboundHandlerAdapter
+import io.netty.channel.ChannelPromise
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.websocketx.*
+import io.netty.util.concurrent.FutureListener
 import mu.KotlinLogging
 
 class WebsocketInboundHandler(
     private val handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit
-) : ChannelInboundHandlerAdapter() {
+) : ChannelDuplexHandler() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
@@ -62,5 +65,29 @@ class WebsocketInboundHandler(
         }
     }
 
+    override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
+        when (msg) {
+            is ByteBuf -> {
+                val binaryWebSocketFrame = BinaryWebSocketFrame(
+                    msg
+                )
+                ctx.write(binaryWebSocketFrame).addListener {
+                    FutureListener<Unit> {
+                        if (!it.isSuccess) {
+                            logger.error(
+                                "write message:${msg.javaClass.name} to ${
+                                    ctx.channel().id().asShortText()
+                                } failed ${ctx.channel().pipeline().names()}", it.cause()
+                            )
+                        }
+                    }
+                }
+            }
+
+            else -> {
+                super.write(ctx, msg, promise)
+            }
+        }
+    }
 }
 

@@ -4,10 +4,12 @@ package netty.inbounds
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.handler.codec.http.*
+import io.netty.handler.codec.socks.SocksAddressType
 import io.netty.handler.stream.ChunkedWriteHandler
 import model.config.Inbound
 import mu.KotlinLogging
 import netty.outbounds.GalaxyOutbound
+import netty.outbounds.Trojan
 import utils.SurferUtils
 import java.net.URI
 
@@ -61,7 +63,23 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                 }
 
                 "trojan" -> {
-                    TODO("Not yet implemented")
+                    Trojan.outbound(originCTX,
+                        outbound,
+                        SocksAddressType.DOMAIN.byteValue(),
+                        uri.host,
+                        port,
+                        {
+                            // If you want to implement http capture, to code right here
+                            it.pipeline().addLast(
+                                ChunkedWriteHandler(),
+                                HttpContentCompressor(),
+                                HttpClientCodec(),
+                            )
+                            it.writeAndFlush(request)
+                        },
+                        {
+                            originCTX.close()
+                        })
                 }
 
                 else -> {

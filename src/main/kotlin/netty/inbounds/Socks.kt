@@ -188,7 +188,6 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                             )
                             ChannelUtils.closeOnFlush(originCTX.channel())
                         })
-
                 }
 
                 else -> {

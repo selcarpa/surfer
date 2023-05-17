@@ -1,5 +1,6 @@
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
+import io.netty.buffer.Unpooled
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.handler.codec.socksx.v5.DefaultSocks5CommandResponse
@@ -37,7 +38,14 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                             trojanPackage.request.host,
                             trojanPackage.request.port,
                             {
-                                originCTX.newPromise().setSuccess()
+                                val payload = Unpooled.buffer()
+                                payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
+                                logger.debug {
+                                    "id: ${
+                                        originCTX.channel().id().asShortText()
+                                    }, write trojan package to galaxy, payload: $payload"
+                                }
+                                it.writeAndFlush(payload)
                             },
                             {
                                 //while connect failed, write failure response to client, and close the connection
