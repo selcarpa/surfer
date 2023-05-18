@@ -242,7 +242,9 @@ open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInbou
                 relayChannel.pipeline().names(),
                 msg.javaClass.name
             )
+            ReferenceCountUtil.retain(msg)
             relayChannel.writeAndFlush(msg).addListener(ChannelFutureListener {
+                ReferenceCountUtil.release(msg)
                 if (!it.isSuccess) {
                     logger.error(
                         "relay inbound write message:${msg.javaClass.name} to id: ${

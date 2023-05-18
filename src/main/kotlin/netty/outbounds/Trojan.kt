@@ -70,7 +70,7 @@ class TrojanOutboundHandler : ChannelOutboundHandlerAdapter() {
                     FutureListener<Unit> {
                         if (!it.isSuccess) {
                             logger.error(
-                                "write message:${msg.javaClass.name} to ${
+                                "Trojan outbound write message:${msg.javaClass.name} to ${
                                     ctx.channel().id().asShortText()
                                 } failed ${ctx.channel().pipeline().names()}", it.cause()
                             )
@@ -80,6 +80,7 @@ class TrojanOutboundHandler : ChannelOutboundHandlerAdapter() {
             }
 
             else -> {
+                logger.debug("TrojanOutboundHandler receive unknown message:${msg?.javaClass?.name}")
                 super.write(ctx, msg, promise)
             }
         }

@@ -131,10 +131,9 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
     ) {
         val resolveOutbound = resolveOutbound(inbound)
         logger.info(
-            "socks5 inbound: id: {}, method: {}, uri: {}",
+            "socks5 inbound: id: {},uri: {}",
             originCTX.channel().id().asShortText(),
-            message.dstAddr(),
-            message.dstPort()
+            "${message.dstAddr()}:${message.dstPort()}"
         )
         resolveOutbound.ifPresent { outbound ->
             when (outbound.protocol) {
@@ -142,10 +141,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                     GalaxyOutbound.outbound(originCTX, outbound, message.dstAddr(), message.dstPort(), {
                         originCTX.channel().writeAndFlush(
                             DefaultSocks5CommandResponse(
-                                Socks5CommandStatus.SUCCESS,
-                                message.dstAddrType(),
-                                message.dstAddr(),
-                                message.dstPort()
+                                Socks5CommandStatus.SUCCESS, message.dstAddrType(), message.dstAddr(), message.dstPort()
                             )
                         ).addListener(ChannelFutureListener {
                             originCTX.pipeline().remove(this@SocksServerConnectHandler)

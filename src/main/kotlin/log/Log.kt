@@ -1,5 +1,6 @@
 package log
 
+import ch.qos.logback.classic.AsyncAppender
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.LoggerContext
@@ -23,6 +24,7 @@ fun loadLogConfig() {
     log.detachAndStopAllAppenders()
     log.isAdditive = false
 
+
     val logConfiguration = Configuration.log
     // set log level
     log.level = (if (logConfiguration == null) Level.INFO else Level.toLevel(logConfiguration.level))
@@ -41,6 +43,13 @@ fun loadLogConfig() {
     logConsoleAppender.encoder = logEncoder
     logConsoleAppender.start()
 
+    //async print to console
+    val asyncLogConsoleAppender = AsyncAppender()
+    asyncLogConsoleAppender.context = logCtx
+    asyncLogConsoleAppender.name="asyncConsole"
+    asyncLogConsoleAppender.addAppender(logConsoleAppender as Appender<ILoggingEvent>)
+    asyncLogConsoleAppender.start()
+//    log.addAppender(asyncLogConsoleAppender)
     log.addAppender(logConsoleAppender as Appender<ILoggingEvent>)
 
 
@@ -60,7 +69,8 @@ fun loadLogConfig() {
         val logFilePolicy: SizeAndTimeBasedRollingPolicy<*> = SizeAndTimeBasedRollingPolicy<Any?>()
         logFilePolicy.context = logCtx
         logFilePolicy.setParent(rollingFileAppender)
-        logFilePolicy.fileNamePattern = "${logConfiguration.path}/${logConfiguration.fileName}-%d{yyyy-MM-dd_HH}-%i.log.zip"
+        logFilePolicy.fileNamePattern =
+            "${logConfiguration.path}/${logConfiguration.fileName}-%d{yyyy-MM-dd_HH}-%i.log.zip"
         logFilePolicy.maxHistory = logConfiguration.maxHistory
         logFilePolicy.setMaxFileSize(FileSize.valueOf("20mb"))
         logFilePolicy.start()
