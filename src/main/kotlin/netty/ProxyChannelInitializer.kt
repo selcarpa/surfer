@@ -16,7 +16,7 @@ import model.config.Inbound
 import mu.KotlinLogging
 import netty.inbounds.HttpProxyServerHandler
 import netty.inbounds.SocksServerHandler
-import netty.inbounds.WebsocketInboundHandler
+import netty.inbounds.WebsocketDuplexHandler
 import java.util.function.Function
 import java.util.stream.Collectors
 
@@ -82,7 +82,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
                     IdleStateHandler(60, 60, 60),
                     WebSocketServerProtocolHandler(inbound.inboundStreamBy.wsInboundSettings[0].path),
                     //todo solve sub-protocol
-                    WebsocketInboundHandler { ctx, _ ->
+                    WebsocketDuplexHandler { ctx, _ ->
                         ctx.pipeline().addLast(TrojanInboundHandler(inbound))
                     })
             }

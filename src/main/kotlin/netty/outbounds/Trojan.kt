@@ -88,8 +88,11 @@ class TrojanOutboundHandler : ChannelOutboundHandlerAdapter() {
 }
 
 class TrojanRelayInboundHandler(
-    relayChannel: Channel, private val trojanSetting: TrojanSetting, private val trojanRequest: TrojanRequest
-) : RelayInboundHandler(relayChannel) {
+    relayChannel: Channel,
+    private val trojanSetting: TrojanSetting,
+    private val trojanRequest: TrojanRequest,
+    private val inActiveCallBack: () -> Unit = {}
+) : RelayInboundHandler(relayChannel, inActiveCallBack) {
     companion object {
         private val logger = KotlinLogging.logger {}
     }

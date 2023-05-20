@@ -10,7 +10,7 @@ import io.netty.handler.codec.http.websocketx.*
 import io.netty.util.concurrent.FutureListener
 import mu.KotlinLogging
 
-class WebsocketInboundHandler(
+class WebsocketDuplexHandler(
     private val handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit
 ) : ChannelDuplexHandler() {
     companion object {

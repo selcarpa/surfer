@@ -167,6 +167,7 @@ class WebSocketClientHandler(
     }
 
     public override fun channelRead0(ctx: ChannelHandlerContext, msg: Any?) {
+        logger.debug { "id: ${ctx.channel().id().asShortText()} WebSocket Client received message: $msg" }
         val ch = ctx.channel()
         if (!handshaker.isHandshakeComplete) {
             try {
@@ -213,7 +214,8 @@ class WebSocketClientHandler(
                     msg.javaClass.name,
                     ctx.pipeline().names()
                 )
-                ctx.fireChannelRead(msg.content())
+                //copy the content to avoid release this handler
+                ctx.fireChannelRead(msg.content().copy())
             }
         }
 
@@ -223,7 +225,8 @@ class WebSocketClientHandler(
 /**
  * relay from client channel to server
  */
-open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInboundHandlerAdapter() {
+open class RelayInboundHandler(private val relayChannel: Channel, private val inActiveCallBack: () -> Unit = {}) :
+    ChannelInboundHandlerAdapter() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
@@ -242,9 +245,7 @@ open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInbou
                 relayChannel.pipeline().names(),
                 msg.javaClass.name
             )
-            ReferenceCountUtil.retain(msg)
             relayChannel.writeAndFlush(msg).addListener(ChannelFutureListener {
-                ReferenceCountUtil.release(msg)
                 if (!it.isSuccess) {
                     logger.error(
                         "relay inbound write message:${msg.javaClass.name} to id: ${
@@ -266,6 +267,7 @@ open class RelayInboundHandler(private val relayChannel: Channel) : ChannelInbou
                 "id: {}  close channel, write close to relay channel", relayChannel.id().asShortText()
             )
             ChannelUtils.closeOnFlush(relayChannel)
+            inActiveCallBack()
         }
     }
 
