@@ -131,7 +131,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
     ) {
         val resolveOutbound = resolveOutbound(inbound)
         logger.info(
-            "socks5 inbound: id: {},uri: {}",
+            "socks5 inbound: [{}],uri: {}",
             originCTX.channel().id().asShortText(),
             "${message.dstAddr()}:${message.dstPort()}"
         )

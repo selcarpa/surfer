@@ -22,7 +22,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
         //http proxy and http connect method
         if (msg is HttpRequest) {
             logger.info(
-                "http inbound: id: {}, method: {}, uri: {}",
+                "http inbound: [{}], method: {}, uri: {}",
                 originCTX.channel().id().asShortText(),
                 msg.method(),
                 msg.uri()
@@ -63,30 +63,24 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                 }
 
                 "trojan" -> {
-                    Trojan.outbound(originCTX,
-                        outbound,
-                        SocksAddressType.DOMAIN.byteValue(),
-                        uri.host,
-                        port,
-                        {
-                            // If you want to implement http capture, to code right here
-                            it.pipeline().addLast(
-                                ChunkedWriteHandler(),
-                                HttpContentCompressor(),
-                                HttpClientCodec(),
-                            )
-                            it.writeAndFlush(request)
-                        },
-                        {
-                            originCTX.close()
-                        })
+                    Trojan.outbound(originCTX, outbound, SocksAddressType.DOMAIN.byteValue(), uri.host, port, {
+                        // If you want to implement http capture, to code right here
+                        it.pipeline().addLast(
+                            ChunkedWriteHandler(),
+                            HttpContentCompressor(),
+                            HttpClientCodec(),
+                        )
+                        it.writeAndFlush(request)
+                    }, {
+                        originCTX.close()
+                    })
                 }
 
                 else -> {
                     logger.error(
-                        "id: ${
+                        "[${
                             originCTX.channel().id().asShortText()
-                        }, protocol=${outbound.protocol} not support"
+                        }], protocol=${outbound.protocol} not support"
                     )
                 }
             }

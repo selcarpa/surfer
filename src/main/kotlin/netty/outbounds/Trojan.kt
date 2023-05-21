@@ -60,11 +60,39 @@ class TrojanOutboundHandler : ChannelOutboundHandlerAdapter() {
 
     }
 
+    private var firstPackage: Boolean = true
+
     override fun write(ctx: ChannelHandlerContext, msg: Any?, promise: ChannelPromise?) {
+        if (firstPackage) {
+            when (msg) {
+                is TrojanPackage -> {
+                    val binaryWebSocketFrame = BinaryWebSocketFrame(
+                        TrojanPackage.toByteBuf(msg)
+                    )
+                    firstPackage = false
+                    ctx.write(binaryWebSocketFrame).addListener {
+                        FutureListener<Unit> {
+                            if (!it.isSuccess) {
+                                logger.error(
+                                    "Trojan outbound write message:${msg.javaClass.name} to ${
+                                        ctx.channel().id().asShortText()
+                                    } failed ${ctx.channel().pipeline().names()}", it.cause()
+                                )
+                            }
+                        }
+                    }
+                }
+
+                else -> {
+                    logger.debug("TrojanOutboundHandler get a unknown message:${msg?.javaClass?.name}")
+                    super.write(ctx, msg, promise)
+                }
+            }
+        }
         when (msg) {
-            is TrojanPackage -> {
+            is ByteBuf -> {
                 val binaryWebSocketFrame = BinaryWebSocketFrame(
-                    TrojanPackage.toByteBuf(msg)
+                    msg.copy()
                 )
                 ctx.write(binaryWebSocketFrame).addListener {
                     FutureListener<Unit> {
@@ -80,15 +108,16 @@ class TrojanOutboundHandler : ChannelOutboundHandlerAdapter() {
             }
 
             else -> {
-                logger.debug("TrojanOutboundHandler receive unknown message:${msg?.javaClass?.name}")
+                logger.debug("TrojanOutboundHandler get a unknown message:${msg?.javaClass?.name}")
                 super.write(ctx, msg, promise)
             }
         }
     }
+
 }
 
 class TrojanRelayInboundHandler(
-    relayChannel: Channel,
+    private val relayChannel: Channel,
     private val trojanSetting: TrojanSetting,
     private val trojanRequest: TrojanRequest,
     private val inActiveCallBack: () -> Unit = {}
@@ -97,24 +126,31 @@ class TrojanRelayInboundHandler(
         private val logger = KotlinLogging.logger {}
     }
 
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        when (msg) {
-            is ByteBuf -> {
-                val currentAllBytes = ByteArray(msg.readableBytes())
-                msg.readBytes(currentAllBytes)
-                ReferenceCountUtil.release(msg)
-                val trojanPackage = TrojanPackage(
-                    Sha224Utils.encryptAndHex(trojanSetting.password),
-                    trojanRequest,
-                    ByteBufUtil.hexDump(currentAllBytes)
-                )
-                super.channelRead(ctx, trojanPackage)
-            }
+    private var firstPackage: Boolean = true
 
-            else -> {
-                logger.error("TrojanRelayHandler receive unknown message:${msg.javaClass.name}")
-                super.channelRead(ctx, msg)
+    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+        if (firstPackage) {
+            when (msg) {
+                is ByteBuf -> {
+                    val currentAllBytes = ByteArray(msg.readableBytes())
+                    msg.readBytes(currentAllBytes)
+                    ReferenceCountUtil.release(msg)
+                    val trojanPackage = TrojanPackage(
+                        Sha224Utils.encryptAndHex(trojanSetting.password),
+                        trojanRequest,
+                        ByteBufUtil.hexDump(currentAllBytes)
+                    )
+                    super.channelRead(ctx, trojanPackage)
+                    firstPackage = false
+                }
+
+                else -> {
+                    logger.error("TrojanRelayHandler receive unknown message:${msg.javaClass.name}")
+                    super.channelRead(ctx, msg)
+                }
             }
+        } else {
+            super.channelRead(ctx, msg)
         }
     }
 }

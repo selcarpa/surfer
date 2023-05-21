@@ -13,7 +13,7 @@ object ChannelUtils {
      * Closes the specified channel after all queued write requests are flushed.
      */
     fun closeOnFlush(ch: Channel) {
-        logger.debug { "closeOnFlush, id: ${ch.id().asShortText()}" }
+        logger.debug { "closeOnFlush, [${ch.id().asShortText()}]" }
         if (ch.isActive) {
             ch.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
         }

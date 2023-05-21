@@ -2,6 +2,7 @@ package netty.stream
 
 
 import io.netty.bootstrap.Bootstrap
+import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
@@ -75,7 +76,7 @@ class Surfer {
 
                     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
                         logger.debug(
-                            "id: {}, galaxy read {}, pipelines: {}",
+                            "[{}], galaxy read {}, pipelines: {}",
                             ctx.channel().id().asShortText(),
                             msg,
                             ctx.channel().pipeline().names()
@@ -163,16 +164,16 @@ class WebSocketClientHandler(
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
-        logger.debug("${ctx.channel().id().asShortText()} WebSocket Client inactive!")
+        logger.debug("[${ctx.channel().id().asShortText()}] WebSocket Client inactive!")
     }
 
     public override fun channelRead0(ctx: ChannelHandlerContext, msg: Any?) {
-        logger.debug { "id: ${ctx.channel().id().asShortText()} WebSocket Client received message: $msg" }
+//        logger.debug { "[${ctx.channel().id().asShortText()}] WebSocket Client received message: $msg" }
         val ch = ctx.channel()
         if (!handshaker.isHandshakeComplete) {
             try {
                 handshaker.finishHandshake(ch, msg as FullHttpResponse?)
-                logger.debug("id: ${ctx.channel().id().asShortText()} WebSocket Client connected!")
+                logger.debug("[${ctx.channel().id().asShortText()}] WebSocket Client connected!")
                 connectPromise.setSuccess(ctx.channel())
             } catch (e: WebSocketHandshakeException) {
                 logger.debug("WebSocket Client failed to connect")
@@ -190,32 +191,44 @@ class WebSocketClientHandler(
 
             is TextWebSocketFrame -> {
                 logger.debug(
-                    "id: ${
+                    "[${
                         ctx.channel().id().asShortText()
-                    }, WebSocket Client received message: " + msg.text()
+                    }], WebSocket Client received message: " + msg.text()
                 )
                 ctx.fireChannelRead(msg)
             }
 
             is PongWebSocketFrame -> {
-                logger.debug("id: ${ctx.channel().id().asShortText()}, WebSocket Client received pong")
+                logger.debug("[${ctx.channel().id().asShortText()}], WebSocket Client received pong")
             }
 
             is CloseWebSocketFrame -> {
-                logger.debug("id: ${ctx.channel().id().asShortText()}, WebSocket Client received closing")
+                logger.debug("[${ctx.channel().id().asShortText()}], WebSocket Client received closing")
                 ch.close()
             }
 
             is BinaryWebSocketFrame -> {
                 logger.debug(
-                    "id: ${
+                    "[${
                         ctx.channel().id().asShortText()
-                    }, WebSocket Client receive message:{}, pipeline handlers:{}",
+                    }], WebSocket Client receive message:{}, pipeline handlers:{}",
                     msg.javaClass.name,
                     ctx.pipeline().names()
                 )
                 //copy the content to avoid release this handler
                 ctx.fireChannelRead(msg.content().copy())
+            }
+
+            is ByteBuf -> {
+                logger.debug(
+                    "[${
+                        ctx.channel().id().asShortText()
+                    }], WebSocket Client receive message:{}, pipeline handlers:{}",
+                    msg.javaClass.name,
+                    ctx.pipeline().names()
+                )
+                ctx.fireChannelRead(msg.copy())
+
             }
         }
 
@@ -238,7 +251,7 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (relayChannel.isActive) {
             logger.debug(
-                "relay inbound read from id: {} pipeline handlers:{}, to id: {} pipeline handlers:{}, write message:{}",
+                "relay inbound read from [{}] pipeline handlers:{}, to [{}] pipeline handlers:{}, write message:{}",
                 ctx.channel().id().asShortText(),
                 ctx.channel().pipeline().names(),
                 relayChannel.id().asShortText(),
@@ -248,9 +261,9 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
             relayChannel.writeAndFlush(msg).addListener(ChannelFutureListener {
                 if (!it.isSuccess) {
                     logger.error(
-                        "relay inbound write message:${msg.javaClass.name} to id: ${
+                        "relay inbound write message:${msg.javaClass.name} to [${
                             relayChannel.id().asShortText()
-                        } failed", it.cause()
+                        }] failed", it.cause()
                     )
                     logger.error(it.cause().message, it.cause())
                 }
@@ -264,7 +277,7 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
     override fun channelInactive(ctx: ChannelHandlerContext) {
         if (relayChannel.isActive) {
             logger.debug(
-                "id: {}  close channel, write close to relay channel", relayChannel.id().asShortText()
+                "[{}]  close channel, write close to relay channel", relayChannel.id().asShortText()
             )
             ChannelUtils.closeOnFlush(relayChannel)
             inActiveCallBack()
@@ -274,7 +287,7 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         logger.error(
-            "relay inbound handler exception caught, id: ${ctx.channel().id()}, pipeline: ${
+            "relay inbound handler exception caught, [${ctx.channel().id()}], pipeline: ${
                 ctx.channel().pipeline().names()
             }, message: ${cause.message}", cause
         )
