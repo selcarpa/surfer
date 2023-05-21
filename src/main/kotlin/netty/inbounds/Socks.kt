@@ -131,9 +131,10 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
     ) {
         val resolveOutbound = resolveOutbound(inbound)
         logger.info(
-            "socks5 inbound: [{}],uri: {}",
+            "socks5 inbound: [{}], uri: {}, command: {}",
             originCTX.channel().id().asShortText(),
-            "${message.dstAddr()}:${message.dstPort()}"
+            "${message.dstAddr()}:${message.dstPort()}",
+            message.type()
         )
         resolveOutbound.ifPresent { outbound ->
             when (outbound.protocol) {
