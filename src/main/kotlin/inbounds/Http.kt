@@ -1,4 +1,4 @@
-package netty.inbounds
+package inbounds
 
 
 import io.netty.channel.ChannelHandlerContext
@@ -8,9 +8,9 @@ import io.netty.handler.codec.socks.SocksAddressType
 import io.netty.handler.stream.ChunkedWriteHandler
 import model.config.Inbound
 import mu.KotlinLogging
-import netty.outbounds.GalaxyOutbound
-import netty.outbounds.Trojan
-import utils.SurferUtils
+import outbounds.GalaxyOutbound
+import outbounds.Trojan
+import route.Route
 import java.net.URI
 
 class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandlerAdapter() {
@@ -39,7 +39,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
 
     private fun httpProxy(originCTX: ChannelHandlerContext, request: HttpRequest) {
         val uri = URI(request.uri())
-        val resolveOutbound = SurferUtils.resolveOutbound(inbound)
+        val resolveOutbound = Route.resolveOutbound(inbound)
 
         val port = when (uri.port) {
             -1 -> 80
@@ -96,7 +96,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                 "https://${request.uri()}"
             }
         )
-        val resolveOutbound = SurferUtils.resolveOutbound(inbound)
+        val resolveOutbound = Route.resolveOutbound(inbound)
 
         val port = when (uri.port) {
             -1 -> 443

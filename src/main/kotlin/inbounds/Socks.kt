@@ -1,4 +1,4 @@
-package netty.inbounds
+package inbounds
 
 
 import io.netty.channel.ChannelFutureListener
@@ -10,10 +10,10 @@ import io.netty.handler.codec.socksx.SocksVersion
 import io.netty.handler.codec.socksx.v5.*
 import model.config.Inbound
 import mu.KotlinLogging
-import netty.outbounds.GalaxyOutbound
-import netty.outbounds.Trojan
+import outbounds.GalaxyOutbound
+import outbounds.Trojan
+import route.Route
 import utils.ChannelUtils
-import utils.SurferUtils.resolveOutbound
 
 @Sharable
 class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
@@ -33,9 +33,7 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
     /**
      * socks5 connect
      */
-    private fun socks5Connect(
-        ctx: ChannelHandlerContext, socksRequest: SocksMessage
-    ) {
+    private fun socks5Connect(ctx: ChannelHandlerContext, socksRequest: SocksMessage) {
         if (inbound.protocol != "socks5") {
             ctx.close()
             return
@@ -83,9 +81,7 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
      * socks5 auth
      * if there's auth configuration in inbound setting then do auth
      */
-    private fun socks5DoAuth(
-        socksRequest: Socks5PasswordAuthRequest, ctx: ChannelHandlerContext
-    ) {
+    private fun socks5DoAuth(socksRequest: Socks5PasswordAuthRequest, ctx: ChannelHandlerContext) {
         if (inbound.socks5Setting?.auth?.username != socksRequest.username() || inbound.socks5Setting?.auth?.password != socksRequest.password()) {
             logger.warn("socks5 auth failed from: ${ctx.channel().remoteAddress()}")
             ctx.write(DefaultSocks5PasswordAuthResponse(Socks5PasswordAuthStatus.FAILURE))
@@ -126,73 +122,39 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
     /**
      * socks5 command
      */
-    private fun socks5Command(
-        originCTX: ChannelHandlerContext, message: Socks5CommandRequest
-    ) {
-        val resolveOutbound = resolveOutbound(inbound)
-        logger.info(
-            "socks5 inbound: [{}], uri: {}, command: {}",
-            originCTX.channel().id().asShortText(),
-            "${message.dstAddr()}:${message.dstPort()}",
-            message.type()
-        )
+    private fun socks5Command(originCTX: ChannelHandlerContext, message: Socks5CommandRequest) {
+        val resolveOutbound = Route.resolveOutbound(inbound)
+        logger.info("socks5 inbound: [{}], uri: {}, command: {}", originCTX.channel().id().asShortText(), "${message.dstAddr()}:${message.dstPort()}", message.type())
         resolveOutbound.ifPresent { outbound ->
             when (outbound.protocol) {
                 "galaxy" -> {
                     GalaxyOutbound.outbound(originCTX, outbound, message.dstAddr(), message.dstPort(), {
-                        originCTX.channel().writeAndFlush(
-                            DefaultSocks5CommandResponse(
-                                Socks5CommandStatus.SUCCESS, message.dstAddrType(), message.dstAddr(), message.dstPort()
-                            )
-                        ).addListener(ChannelFutureListener {
+                        originCTX.channel().writeAndFlush(DefaultSocks5CommandResponse(Socks5CommandStatus.SUCCESS, message.dstAddrType(), message.dstAddr(), message.dstPort())).addListener(ChannelFutureListener {
                             originCTX.pipeline().remove(this@SocksServerConnectHandler)
                         })
                     }, {
                         //while connect failed, write failure response to client, and close the connection
-                        originCTX.channel().writeAndFlush(
-                            DefaultSocks5CommandResponse(
-                                Socks5CommandStatus.FAILURE, message.dstAddrType()
-                            )
-                        )
+                        originCTX.channel().writeAndFlush(DefaultSocks5CommandResponse(Socks5CommandStatus.FAILURE, message.dstAddrType()))
                         ChannelUtils.closeOnFlush(originCTX.channel())
                     })
                 }
 
                 "trojan" -> {
-                    Trojan.outbound(originCTX,
-                        outbound,
-                        message.dstAddrType().byteValue(),
-                        message.dstAddr(),
-                        message.dstPort(),
-                        {
-                            originCTX.channel().writeAndFlush(
-                                DefaultSocks5CommandResponse(
-                                    Socks5CommandStatus.SUCCESS,
-                                    message.dstAddrType(),
-                                    message.dstAddr(),
-                                    message.dstPort()
-                                )
-                            ).addListener(ChannelFutureListener {
-                                originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                            })
-                        },
-                        {
-                            //while connect failed, write failure response to client, and close the connection
-                            originCTX.channel().writeAndFlush(
-                                DefaultSocks5CommandResponse(
-                                    Socks5CommandStatus.FAILURE, message.dstAddrType()
-                                )
-                            )
-                            ChannelUtils.closeOnFlush(originCTX.channel())
+                    Trojan.outbound(originCTX, outbound, message.dstAddrType().byteValue(), message.dstAddr(), message.dstPort(), {
+                        originCTX.channel().writeAndFlush(DefaultSocks5CommandResponse(Socks5CommandStatus.SUCCESS, message.dstAddrType(), message.dstAddr(), message.dstPort())).addListener(ChannelFutureListener {
+                            originCTX.pipeline().remove(this@SocksServerConnectHandler)
                         })
+                    }, {
+                        //while connect failed, write failure response to client, and close the connection
+                        originCTX.channel().writeAndFlush(DefaultSocks5CommandResponse(Socks5CommandStatus.FAILURE, message.dstAddrType()))
+                        ChannelUtils.closeOnFlush(originCTX.channel())
+                    })
                 }
 
                 else -> {
-                    logger.error(
-                        "id: ${
-                            originCTX.channel().id().asShortText()
-                        }, protocol=${outbound.protocol} not support"
-                    )
+                    logger.error("id: ${
+                        originCTX.channel().id().asShortText()
+                    }, protocol=${outbound.protocol} not support")
                 }
             }
         }

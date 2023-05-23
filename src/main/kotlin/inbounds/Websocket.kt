@@ -1,6 +1,7 @@
-package netty.inbounds
+package inbounds
 
 
+import inbounds.Websocket.websocketWrite
 import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelHandlerContext
@@ -10,9 +11,7 @@ import io.netty.handler.codec.http.websocketx.*
 import io.netty.util.concurrent.FutureListener
 import mu.KotlinLogging
 
-class WebsocketDuplexHandler(
-    private val handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit
-) : ChannelDuplexHandler() {
+class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit) : ChannelDuplexHandler() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
@@ -45,17 +44,11 @@ class WebsocketDuplexHandler(
             }
 
             is TextWebSocketFrame -> {
-                logger.debug(
-                    "WebsocketInbound receive message:${msg.javaClass.name} ${msg.text()}"
-                )
+                logger.debug("WebsocketInbound receive message:${msg.javaClass.name} ${msg.text()}")
             }
 
             is BinaryWebSocketFrame -> {
-                logger.debug(
-                    "WebsocketInbound receive message:{}, pipeline handlers:{}",
-                    msg.javaClass.name,
-                    ctx.pipeline().names()
-                )
+                logger.debug("WebsocketInbound receive message:{}, pipeline handlers:{}", msg.javaClass.name, ctx.pipeline().names())
                 ctx.fireChannelRead(msg.content())
             }
 
@@ -66,28 +59,32 @@ class WebsocketDuplexHandler(
     }
 
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
+        websocketWrite(ctx, msg, promise)
+    }
+
+
+}
+
+object Websocket {
+    private val logger = KotlinLogging.logger {}
+    fun websocketWrite(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         when (msg) {
             is ByteBuf -> {
-                val binaryWebSocketFrame = BinaryWebSocketFrame(
-                    msg
-                )
+                val binaryWebSocketFrame = BinaryWebSocketFrame(msg.copy())
                 ctx.write(binaryWebSocketFrame).addListener {
                     FutureListener<Unit> {
                         if (!it.isSuccess) {
-                            logger.error(
-                                "write message:${msg.javaClass.name} to ${
-                                    ctx.channel().id().asShortText()
-                                } failed ${ctx.channel().pipeline().names()}", it.cause()
-                            )
+                            logger.error("write message:${msg.javaClass.name} to ${
+                                ctx.channel().id().asShortText()
+                            } failed ${ctx.channel().pipeline().names()}", it.cause())
                         }
                     }
                 }
             }
 
             else -> {
-                super.write(ctx, msg, promise)
+                ctx.write(msg, promise)
             }
         }
     }
 }
-

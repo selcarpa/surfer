@@ -57,11 +57,9 @@ java -jar surfer.jar -c=config.json
       port: 14272,
       inboundStreamBy: {
         type: "ws",
-        wsInboundSettings: [
-          {
-            path: "/exam"
-          }
-        ]
+        wsInboundSettings: {
+          path: "/exam"
+        }
       }
     }
   ],
@@ -73,13 +71,11 @@ java -jar surfer.jar -c=config.json
       protocol: "trojan",
       outboundStreamBy: {
         type: "wss",
-        wsOutboundSettings: [
-          {
-            port: 443,
-            host: "a.exampl.com",
-            path: "/exam"
-          }
-        ]
+        wsOutboundSetting: {
+          port: 443,
+          host: "a.exampl.com",
+          path: "/exam"
+        }
       },
       trojanSetting: {
         password: "any password"

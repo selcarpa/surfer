@@ -4,7 +4,7 @@ import com.google.gson.Gson
 import java.io.File
 
 data class ConfigurationSettings(
-    val log: LogConfiguration?, val inbounds: List<Inbound>, val outbounds: List<Outbound>,
+        val log: LogConfiguration?, val inbounds: List<Inbound>, val outbounds: List<Outbound>,
 ) {
     companion object {
         var ConfigurationUrl: String? = null
@@ -24,28 +24,16 @@ data class ConfigurationSettings(
     }
 }
 
-data class Inbound(
-    val port: Int,
-    val protocol: String,
-    val inboundStreamBy: InboundStreamBy?,
-    val socks5Setting: Socks5Setting?,
-    val trojanSettings: List<TrojanSetting>?
-)
+data class Inbound(val port: Int, val protocol: String, val inboundStreamBy: InboundStreamBy?, val socks5Setting: Socks5Setting?, val trojanSettings: List<TrojanSetting>?)
 
 data class Socks5Setting(val auth: Auth?)
 data class Auth(val password: String, val username: String)
 data class Outbound(val protocol: String, val trojanSetting: TrojanSetting?, val outboundStreamBy: OutboundStreamBy?)
-data class OutboundStreamBy(val type: String, val wsOutboundSettings: List<WsOutboundSetting>)
-data class InboundStreamBy(val type: String, val wsInboundSettings: List<WsInboundSetting>)
+data class OutboundStreamBy(val type: String, val wsOutboundSetting: WsOutboundSetting)
+data class InboundStreamBy(val type: String, val wsInboundSetting: WsInboundSetting)
 data class WsOutboundSetting(val path: String, val port: Int, val host: String)
 data class WsInboundSetting(val path: String)
 data class TrojanSetting(val password: String) : ProxyProtocolSetting()
-data class LogConfiguration(
-    var level: String = "info",
-    var pattern: String = "%date{ISO8601} %highlight(%level) [%t] %cyan(%logger{16}) %M: %msg%n",
-    var maxHistory: Int = 7,
-    var fileName: String = "",
-    var path: String? = "./logs/"
-)
+data class LogConfiguration(var level: String = "info", var pattern: String = "%date{ISO8601} %highlight(%level) [%t] %cyan(%logger{16}) %M: %msg%n", var maxHistory: Int = 7, var fileName: String = "", var path: String? = "./logs/")
 
 open class ProxyProtocolSetting()
