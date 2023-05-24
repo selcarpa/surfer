@@ -5,7 +5,6 @@ import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
 import io.netty.channel.Channel
 import io.netty.channel.ChannelFuture
-import io.netty.channel.ChannelFutureListener
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.util.ReferenceCountUtil
@@ -20,7 +19,7 @@ import stream.RelayInboundHandler
 import stream.Surfer
 import utils.Sha224Utils
 
-object Trojan : outbounds.Outbound {
+object Trojan {
     fun outbound(
         originCTX: ChannelHandlerContext,
         outbound: Outbound,
@@ -34,19 +33,16 @@ object Trojan : outbounds.Outbound {
         val connectListener = FutureListener<Channel> { future ->
             val outboundChannel = future.now
             if (future.isSuccess) {
-                connectSuccess(outboundChannel).also { channelFuture ->
-                    channelFuture.addListener(ChannelFutureListener {
-                        outboundChannel.pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(originCTX.channel()))
-                        originCTX.pipeline().addLast(
-                            RELAY_HANDLER_NAME, TrojanRelayInboundHandler(
-                                outboundChannel,
-                                outbound.trojanSetting!!,
-                                TrojanRequest(Socks5CommandType.CONNECT.byteValue(), destAddrType, destAddr, destPort),
-                                firstPackage = firstPackage
-                            )
-                        )
-                    })
-                }
+                connectSuccess(outboundChannel)
+                outboundChannel.pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(originCTX.channel()))
+                originCTX.pipeline().addLast(
+                    RELAY_HANDLER_NAME, TrojanRelayInboundHandler(
+                        outboundChannel,
+                        outbound.trojanSetting!!,
+                        TrojanRequest(Socks5CommandType.CONNECT.byteValue(), destAddrType, destAddr, destPort),
+                        firstPackage = firstPackage
+                    )
+                )
             } else {
                 connectFail()
             }

@@ -13,6 +13,7 @@ import ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy
 import ch.qos.logback.core.util.FileSize
 import model.config.ConfigurationSettings.Companion.Configuration
 import org.slf4j.LoggerFactory
+import java.io.File
 import java.nio.charset.StandardCharsets
 
 
@@ -46,7 +47,7 @@ fun loadLogConfig() {
     //async print to console
     val asyncLogConsoleAppender = AsyncAppender()
     asyncLogConsoleAppender.context = logCtx
-    asyncLogConsoleAppender.name="asyncConsole"
+    asyncLogConsoleAppender.name = "asyncConsole"
     asyncLogConsoleAppender.addAppender(logConsoleAppender as Appender<ILoggingEvent>)
     asyncLogConsoleAppender.start()
 //    log.addAppender(asyncLogConsoleAppender)
@@ -63,7 +64,7 @@ fun loadLogConfig() {
         rollingFileAppender.name = "logFile"
         rollingFileAppender.encoder = logEncoder
         rollingFileAppender.isAppend = true
-        rollingFileAppender.file = "${logConfiguration.path}\\${logConfiguration.fileName}.log"
+        rollingFileAppender.file = "${logConfiguration.path}${File.separator}${logConfiguration.fileName}.log"
 
         //init log rolling policy
         val logFilePolicy: SizeAndTimeBasedRollingPolicy<*> = SizeAndTimeBasedRollingPolicy<Any?>()

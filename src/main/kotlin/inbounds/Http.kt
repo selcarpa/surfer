@@ -94,7 +94,13 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                                         )
                                     )
                                 )
-                            )
+                            ).also {
+                                //remove all listener
+                                val pipeline = originCTX.pipeline()
+                                while (pipeline.first() != null) {
+                                    pipeline.removeFirst()
+                                }
+                            }
                         },
                         {
                             originCTX.close()
