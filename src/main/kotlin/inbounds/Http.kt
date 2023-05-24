@@ -1,17 +1,24 @@
 package inbounds
 
 
+import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
+import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.*
-import io.netty.handler.codec.socks.SocksAddressType
+import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.handler.stream.ChunkedWriteHandler
 import model.config.Inbound
+import model.protocol.TrojanPackage
+import model.protocol.TrojanRequest
 import mu.KotlinLogging
 import outbounds.GalaxyOutbound
 import outbounds.Trojan
+import outbounds.byteBuf2TrojanPackage
 import route.Route
+import utils.SurferUtils
 import java.net.URI
+
 
 class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandlerAdapter() {
     companion object {
@@ -52,9 +59,9 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                     GalaxyOutbound.outbound(originCTX, outbound, uri.host, port, {
                         // If you want to implement http capture, to code right here
                         it.pipeline().addFirst(
-                            ChunkedWriteHandler(),
-                            HttpContentCompressor(),
                             HttpClientCodec(),
+                            HttpContentDecompressor(),
+                            ChunkedWriteHandler(),
                         )
                         it.writeAndFlush(request)
                     }, {
@@ -63,17 +70,37 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                 }
 
                 "trojan" -> {
-                    Trojan.outbound(originCTX, outbound, SocksAddressType.DOMAIN.byteValue(), uri.host, port, {
-                        // If you want to implement http capture, to code right here
-                        it.pipeline().addLast(
-                            ChunkedWriteHandler(),
-                            HttpContentCompressor(),
-                            HttpClientCodec(),
-                        )
-                        it.writeAndFlush(request)
-                    }, {
-                        originCTX.close()
-                    })
+                    Trojan.outbound(originCTX,
+                        outbound,
+                        SurferUtils.getAddressType(uri.host).byteValue(),
+                        uri.host,
+                        port,
+                        {
+                            // If you want to implement http capture, to code right here
+
+                            val ch = EmbeddedChannel(HttpRequestEncoder())
+                            ch.writeOutbound(request)
+                            val encoded = ch.readOutbound<ByteBuf>()
+                            ch.close()
+
+                            it.writeAndFlush(
+                                TrojanPackage.toByteBuf(
+                                    byteBuf2TrojanPackage(
+                                        encoded, outbound.trojanSetting!!, TrojanRequest(
+                                            Socks5CommandType.CONNECT.byteValue(),
+                                            SurferUtils.getAddressType(uri.host).byteValue(),
+                                            uri.host,
+                                            port
+                                        )
+                                    )
+                                )
+                            )
+                        },
+                        {
+                            originCTX.close()
+                        },
+//                        firstPackage = false
+                    )
                 }
 
                 else -> {
@@ -126,7 +153,29 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                 }
 
                 "trojan" -> {
-                    TODO("Not yet implemented")
+                    Trojan.outbound(originCTX,
+                        outbound,
+                        SurferUtils.getAddressType(uri.host).byteValue(),
+                        uri.host,
+                        port,
+                        {
+                            //write Connection Established
+                            originCTX.writeAndFlush(
+                                DefaultHttpResponse(
+                                    request.protocolVersion(),
+                                    HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
+                                )
+                            ).also {
+                                //remove all listener
+                                val pipeline = originCTX.pipeline()
+                                while (pipeline.first() != null) {
+                                    pipeline.removeFirst()
+                                }
+                            }
+                        },
+                        {
+                            originCTX.close()
+                        })
                 }
 
                 else -> {

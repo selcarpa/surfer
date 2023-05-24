@@ -11,6 +11,7 @@ import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.HttpContentCompressor
 import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpServerCodec
+import io.netty.handler.codec.http.HttpServerExpectContinueHandler
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
 import io.netty.handler.stream.ChunkedWriteHandler
@@ -62,7 +63,12 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
     }
 
     private fun initHttpInbound(ch: NioSocketChannel, inbound: Inbound) {
-        ch.pipeline().addLast(ChunkedWriteHandler(), HttpServerCodec(), HttpContentCompressor(), HttpObjectAggregator(Int.MAX_VALUE), HttpProxyServerHandler(inbound))
+        ch.pipeline().addLast(
+            ChunkedWriteHandler(),
+            HttpServerCodec(),
+            HttpContentCompressor(),
+            HttpObjectAggregator(Int.MAX_VALUE),
+            HttpProxyServerHandler(inbound))
     }
 
     private fun initTrojanInbound(ch: NioSocketChannel, inbound: Inbound) {

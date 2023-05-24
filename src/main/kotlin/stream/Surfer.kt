@@ -39,12 +39,22 @@ class Surfer {
     companion object {
         private val logger = KotlinLogging.logger {}
 
-        fun outbound(outbound: Outbound, connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress? = null, eventLoopGroup: EventLoopGroup = NioEventLoopGroup()) {
+        fun outbound(
+            outbound: Outbound,
+            connectListener: FutureListener<Channel>,
+            socketAddress: InetSocketAddress? = null,
+            eventLoopGroup: EventLoopGroup = NioEventLoopGroup()
+        ) {
             if (outbound.outboundStreamBy == null) {
                 return galaxy(connectListener, socketAddress!!, eventLoopGroup)
             }
             return when (outbound.outboundStreamBy.type) {
-                "ws", "wss" -> wsStream(connectListener, outbound.outboundStreamBy.wsOutboundSetting, outbound.outboundStreamBy.type, eventLoopGroup)
+                "ws", "wss" -> wsStream(
+                    connectListener,
+                    outbound.outboundStreamBy.wsOutboundSetting,
+                    outbound.outboundStreamBy.type,
+                    eventLoopGroup
+                )
 
                 else -> {
                     logger.error { "stream type ${outbound.outboundStreamBy.type} not supported" }
@@ -52,25 +62,41 @@ class Surfer {
             }
         }
 
-        private fun galaxy(connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress, eventLoopGroup: EventLoopGroup) {
+        private fun galaxy(
+            connectListener: FutureListener<Channel>,
+            socketAddress: InetSocketAddress,
+            eventLoopGroup: EventLoopGroup
+        ) {
             val b = Bootstrap()
             val promise = eventLoopGroup.next().newPromise<Channel>()
             promise.addListener(connectListener)
-            b.group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true).handler(LoggingHandler("galaxy logger", LogLevel.DEBUG, ByteBufFormat.HEX_DUMP)).handler(object : ChannelInboundHandlerAdapter() {
-                override fun channelActive(ctx: ChannelHandlerContext) {
-                    super.channelActive(ctx)
-                    promise.setSuccess(ctx.channel())
-                }
+            b.group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
+                .handler(LoggingHandler("galaxy logger", LogLevel.DEBUG, ByteBufFormat.HEX_DUMP))
+                .handler(object : ChannelInboundHandlerAdapter() {
+                    override fun channelActive(ctx: ChannelHandlerContext) {
+                        super.channelActive(ctx)
+                        promise.setSuccess(ctx.channel())
+                    }
 
-                override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-                    logger.debug("[{}], galaxy read {}, pipelines: {}", ctx.channel().id().asShortText(), msg, ctx.channel().pipeline().names())
-                    super.channelRead(ctx, msg)
-                }
-            })
+                    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+                        logger.debug(
+                            "[{}], galaxy read {}, pipelines: {}",
+                            ctx.channel().id().asShortText(),
+                            msg,
+                            ctx.channel().pipeline().names()
+                        )
+                        super.channelRead(ctx, msg)
+                    }
+                })
             b.connect(socketAddress)
         }
 
-        private fun wsStream(connectListener: FutureListener<Channel>, wsOutboundSetting: WsOutboundSetting, type: String, eventLoopGroup: EventLoopGroup) {
+        private fun wsStream(
+            connectListener: FutureListener<Channel>,
+            wsOutboundSetting: WsOutboundSetting,
+            type: String,
+            eventLoopGroup: EventLoopGroup
+        ) {
             val b = Bootstrap()
             val promise = eventLoopGroup.next().newPromise<Channel>()
             promise.addListener(connectListener)
@@ -99,18 +125,33 @@ class Surfer {
             // Connect with V13 (RFC 6455 aka HyBi-17). You can change it to V08 or V00.
             // If you change it to V00, ping is not supported and remember to change
             // HttpResponseDecoder to WebSocketHttpResponseDecoder in the pipeline.
-            val webSocketClientHandler = WebSocketClientHandler(WebSocketClientHandshakerFactory.newHandshaker(uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()), promise)
+            val webSocketClientHandler = WebSocketClientHandler(
+                WebSocketClientHandshakerFactory.newHandshaker(
+                    uri,
+                    WebSocketVersion.V13,
+                    null,
+                    true,
+                    DefaultHttpHeaders()
+                ), promise
+            )
 
-            b.group(eventLoopGroup).channel(NioSocketChannel::class.java).handler(object : ChannelInitializer<SocketChannel>() {
-                override fun initChannel(ch: SocketChannel) {
-                    if (sslCtx != null) {
-                        ch.pipeline().addLast(sslCtx.newHandler(ch.alloc(), wsOutboundSetting.host, wsOutboundSetting.port))
+            b.group(eventLoopGroup).channel(NioSocketChannel::class.java)
+                .handler(object : ChannelInitializer<SocketChannel>() {
+                    override fun initChannel(ch: SocketChannel) {
+                        if (sslCtx != null) {
+                            ch.pipeline()
+                                .addLast(sslCtx.newHandler(ch.alloc(), wsOutboundSetting.host, wsOutboundSetting.port))
+                        }
+
+                        ch.pipeline().addLast(
+                            HttpClientCodec(),
+                            HttpObjectAggregator(8192),
+                            WebSocketClientCompressionHandler.INSTANCE,
+                            webSocketClientHandler
+                        )
                     }
 
-                    ch.pipeline().addLast(HttpClientCodec(), HttpObjectAggregator(8192), WebSocketClientCompressionHandler.INSTANCE, webSocketClientHandler)
-                }
-
-            })
+                })
             b.connect(uri.host, port)
 
         }
@@ -118,7 +159,10 @@ class Surfer {
 
 }
 
-class WebSocketClientHandler(private val handshaker: WebSocketClientHandshaker, private val connectPromise: Promise<Channel>) : ChannelDuplexHandler() {
+class WebSocketClientHandler(
+    private val handshaker: WebSocketClientHandshaker,
+    private val connectPromise: Promise<Channel>
+) : ChannelDuplexHandler() {
 
     companion object {
         private val logger = KotlinLogging.logger {}
@@ -144,13 +188,18 @@ class WebSocketClientHandler(private val handshaker: WebSocketClientHandshaker, 
         }
         when (msg) {
             is FullHttpResponse -> {
-                throw IllegalStateException("Unexpected FullHttpResponse (getStatus=" + msg.status() + ", content=" + msg.content().toString(CharsetUtil.UTF_8) + ')')
+                throw IllegalStateException(
+                    "Unexpected FullHttpResponse (getStatus=" + msg.status() + ", content=" + msg.content()
+                        .toString(CharsetUtil.UTF_8) + ')'
+                )
             }
 
             is TextWebSocketFrame -> {
-                logger.debug("[${
-                    ctx.channel().id().asShortText()
-                }], WebSocket Client received message: " + msg.text())
+                logger.debug(
+                    "[${
+                        ctx.channel().id().asShortText()
+                    }], WebSocket Client received message: " + msg.text()
+                )
                 ctx.fireChannelRead(msg)
             }
 
@@ -164,17 +213,25 @@ class WebSocketClientHandler(private val handshaker: WebSocketClientHandshaker, 
             }
 
             is BinaryWebSocketFrame -> {
-                logger.debug("[${
-                    ctx.channel().id().asShortText()
-                }], WebSocket Client receive message:{}, pipeline handlers:{}", msg.javaClass.name, ctx.pipeline().names())
+                logger.debug(
+                    "[${
+                        ctx.channel().id().asShortText()
+                    }], WebSocket Client receive message:{}, pipeline handlers:{}",
+                    msg.javaClass.name,
+                    ctx.pipeline().names()
+                )
                 //copy the content to avoid release this handler
                 ctx.fireChannelRead(msg.content().copy())
             }
 
             is ByteBuf -> {
-                logger.debug("[${
-                    ctx.channel().id().asShortText()
-                }], WebSocket Client receive message:{}, pipeline handlers:{}", msg.javaClass.name, ctx.pipeline().names())
+                logger.debug(
+                    "[${
+                        ctx.channel().id().asShortText()
+                    }], WebSocket Client receive message:{}, pipeline handlers:{}",
+                    msg.javaClass.name,
+                    ctx.pipeline().names()
+                )
                 ctx.fireChannelRead(msg.copy())
 
             }
@@ -182,6 +239,11 @@ class WebSocketClientHandler(private val handshaker: WebSocketClientHandshaker, 
     }
 
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
+        logger.debug(
+            "[${
+                ctx.channel().id().asShortText()
+            }], WebSocket Client send message:{}, pipeline handlers:{}", msg.javaClass.name, ctx.pipeline().names()
+        )
         Websocket.websocketWrite(ctx, msg, promise)
     }
 }
@@ -189,7 +251,8 @@ class WebSocketClientHandler(private val handshaker: WebSocketClientHandshaker, 
 /**
  * relay from client channel to server
  */
-open class RelayInboundHandler(private val relayChannel: Channel, private val inActiveCallBack: () -> Unit = {}) : ChannelInboundHandlerAdapter() {
+open class RelayInboundHandler(private val relayChannel: Channel, private val inActiveCallBack: () -> Unit = {}) :
+    ChannelInboundHandlerAdapter() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
@@ -200,17 +263,30 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (relayChannel.isActive) {
-            logger.debug("relay inbound read from [{}] pipeline handlers:{}, to [{}] pipeline handlers:{}, write message:{}", ctx.channel().id().asShortText(), ctx.channel().pipeline().names(), relayChannel.id().asShortText(), relayChannel.pipeline().names(), msg.javaClass.name)
+            logger.debug(
+                "relay inbound read from [{}] pipeline handlers:{}, to [{}] pipeline handlers:{}, write message:{}",
+                ctx.channel().id().asShortText(),
+                ctx.channel().pipeline().names(),
+                relayChannel.id().asShortText(),
+                relayChannel.pipeline().names(),
+                msg.javaClass.name
+            )
             relayChannel.writeAndFlush(msg).addListener(ChannelFutureListener {
                 if (!it.isSuccess) {
-                    logger.error("relay inbound write message:${msg.javaClass.name} to [${
-                        relayChannel.id().asShortText()
-                    }] failed, cause: {}", it.cause())
+                    logger.error(
+                        "relay inbound write message:${msg.javaClass.name} to [${
+                            relayChannel.id().asShortText()
+                        }] failed, cause: {}", it.cause()
+                    )
                     logger.error(it.cause().message, it.cause())
                 }
             })
         } else {
-            logger.warn("relay channel　[${relayChannel.id().asShortText()}] is not active, close message:${msg.javaClass.name}")
+            logger.warn(
+                "relay channel　[${
+                    relayChannel.id().asShortText()
+                }] is not active, close message:${msg.javaClass.name}"
+            )
             ReferenceCountUtil.release(msg)
         }
     }
@@ -226,9 +302,11 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        logger.error("relay inbound handler exception caught, [${ctx.channel().id()}], pipeline: ${
-            ctx.channel().pipeline().names()
-        }, message: ${cause.message}", cause)
+        logger.error(
+            "relay inbound handler exception caught, [${ctx.channel().id()}], pipeline: ${
+                ctx.channel().pipeline().names()
+            }, message: ${cause.message}", cause
+        )
         ctx.close()
     }
 }

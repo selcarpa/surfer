@@ -20,26 +20,50 @@ import stream.RelayInboundHandler
 import stream.Surfer
 import utils.Sha224Utils
 
-object Trojan {
-    fun outbound(originCTX: ChannelHandlerContext, outbound: Outbound, destAddrType: Byte, destAddr: String, destPort: Int, connectSuccess: (Channel) -> ChannelFuture, connectFail: () -> Unit) {
+object Trojan : outbounds.Outbound {
+    fun outbound(
+        originCTX: ChannelHandlerContext,
+        outbound: Outbound,
+        destAddrType: Byte,
+        destAddr: String,
+        destPort: Int,
+        connectSuccess: (Channel) -> ChannelFuture,
+        connectFail: () -> Unit,
+        firstPackage: Boolean = true
+    ) {
         val connectListener = FutureListener<Channel> { future ->
             val outboundChannel = future.now
             if (future.isSuccess) {
                 connectSuccess(outboundChannel).also { channelFuture ->
                     channelFuture.addListener(ChannelFutureListener {
                         outboundChannel.pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(originCTX.channel()))
-                        originCTX.pipeline().addLast(RELAY_HANDLER_NAME, TrojanRelayInboundHandler(outboundChannel, outbound.trojanSetting!!, TrojanRequest(Socks5CommandType.CONNECT.byteValue(), destAddrType, destAddr, destPort)))
+                        originCTX.pipeline().addLast(
+                            RELAY_HANDLER_NAME, TrojanRelayInboundHandler(
+                                outboundChannel,
+                                outbound.trojanSetting!!,
+                                TrojanRequest(Socks5CommandType.CONNECT.byteValue(), destAddrType, destAddr, destPort),
+                                firstPackage = firstPackage
+                            )
+                        )
                     })
                 }
             } else {
                 connectFail()
             }
         }
-        Surfer.outbound(outbound = outbound, connectListener = connectListener, eventLoopGroup = originCTX.channel().eventLoop())
+        Surfer.outbound(
+            outbound = outbound, connectListener = connectListener, eventLoopGroup = originCTX.channel().eventLoop()
+        )
     }
 }
 
-class TrojanRelayInboundHandler(relayChannel: Channel, private val trojanSetting: TrojanSetting, private val trojanRequest: TrojanRequest, inActiveCallBack: () -> Unit = {}) : RelayInboundHandler(relayChannel, inActiveCallBack) {
+class TrojanRelayInboundHandler(
+    relayChannel: Channel,
+    private val trojanSetting: TrojanSetting,
+    private val trojanRequest: TrojanRequest,
+    inActiveCallBack: () -> Unit = {},
+    private var firstPackage: Boolean = true
+) : RelayInboundHandler(relayChannel, inActiveCallBack) {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
@@ -47,16 +71,13 @@ class TrojanRelayInboundHandler(relayChannel: Channel, private val trojanSetting
     /**
      * Trojan protocol only need package once, then send origin data directly
      */
-    private var firstPackage: Boolean = true
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (firstPackage) {
             when (msg) {
                 is ByteBuf -> {
-                    val currentAllBytes = ByteArray(msg.readableBytes())
-                    msg.readBytes(currentAllBytes)
+                    val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
                     ReferenceCountUtil.release(msg)
-                    val trojanPackage = TrojanPackage(Sha224Utils.encryptAndHex(trojanSetting.password), trojanRequest, ByteBufUtil.hexDump(currentAllBytes))
                     super.channelRead(ctx, TrojanPackage.toByteBuf(trojanPackage))
                     firstPackage = false
                 }
@@ -70,4 +91,13 @@ class TrojanRelayInboundHandler(relayChannel: Channel, private val trojanSetting
             super.channelRead(ctx, msg)
         }
     }
+
+}
+
+fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequest: TrojanRequest): TrojanPackage {
+    val currentAllBytes = ByteArray(msg.readableBytes())
+    msg.readBytes(currentAllBytes)
+    return TrojanPackage(
+        Sha224Utils.encryptAndHex(trojanSetting.password), trojanRequest, ByteBufUtil.hexDump(currentAllBytes)
+    )
 }

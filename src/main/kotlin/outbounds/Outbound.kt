@@ -1,0 +1,5 @@
+package outbounds
+
+interface Outbound {
+
+}

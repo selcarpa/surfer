@@ -1,3 +1,4 @@
+
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
 import io.netty.buffer.Unpooled
@@ -11,7 +12,6 @@ import outbounds.Trojan
 import route.Route
 import utils.ChannelUtils
 import utils.Sha224Utils
-import utils.SurferUtils
 
 class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<ByteBuf>() {
     companion object {
