@@ -1,9 +1,9 @@
 package netty
 
 
-import TrojanInboundHandler
 import inbounds.HttpProxyServerHandler
 import inbounds.SocksServerHandler
+import inbounds.TrojanInboundHandler
 import inbounds.WebsocketDuplexHandler
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInitializer
@@ -11,7 +11,6 @@ import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.HttpContentCompressor
 import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpServerCodec
-import io.netty.handler.codec.http.HttpServerExpectContinueHandler
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
 import io.netty.handler.stream.ChunkedWriteHandler

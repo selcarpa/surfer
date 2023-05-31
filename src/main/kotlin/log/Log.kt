@@ -71,9 +71,9 @@ fun loadLogConfig() {
         logFilePolicy.context = logCtx
         logFilePolicy.setParent(rollingFileAppender)
         logFilePolicy.fileNamePattern =
-            "${logConfiguration.path}/${logConfiguration.fileName}-%d{yyyy-MM-dd_HH}-%i.log.zip"
+            "${logConfiguration.path}/${logConfiguration.fileName}-%d{yyyy-MM-dd_HH}-%i.zip"
         logFilePolicy.maxHistory = logConfiguration.maxHistory
-        logFilePolicy.setMaxFileSize(FileSize.valueOf("20mb"))
+        logFilePolicy.setMaxFileSize(FileSize.valueOf("50mb"))
         logFilePolicy.start()
 
         rollingFileAppender.rollingPolicy = logFilePolicy

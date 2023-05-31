@@ -4,54 +4,17 @@ package outbounds
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
 import io.netty.channel.Channel
-import io.netty.channel.ChannelFuture
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.util.ReferenceCountUtil
-import io.netty.util.concurrent.FutureListener
-import model.RELAY_HANDLER_NAME
 import model.config.Outbound
 import model.config.TrojanSetting
+import model.protocol.ConnectTo
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
 import stream.RelayInboundHandler
-import stream.Surfer
 import utils.Sha224Utils
-
-object Trojan {
-    fun outbound(
-        originCTX: ChannelHandlerContext,
-        outbound: Outbound,
-        destAddrType: Byte,
-        destAddr: String,
-        destPort: Int,
-        connectSuccess: (Channel) -> ChannelFuture,
-        connectFail: () -> Unit,
-        firstPackage: Boolean = true
-    ) {
-        val connectListener = FutureListener<Channel> { future ->
-            val outboundChannel = future.now
-            if (future.isSuccess) {
-                connectSuccess(outboundChannel)
-                outboundChannel.pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(originCTX.channel()))
-                originCTX.pipeline().addLast(
-                    RELAY_HANDLER_NAME, TrojanRelayInboundHandler(
-                        outboundChannel,
-                        outbound.trojanSetting!!,
-                        TrojanRequest(Socks5CommandType.CONNECT.byteValue(), destAddrType, destAddr, destPort),
-                        firstPackage = firstPackage
-                    )
-                )
-            } else {
-                connectFail()
-            }
-        }
-        Surfer.outbound(
-            outbound = outbound, connectListener = connectListener, eventLoopGroup = originCTX.channel().eventLoop()
-        )
-    }
-}
 
 class TrojanRelayInboundHandler(
     relayChannel: Channel,
@@ -63,6 +26,17 @@ class TrojanRelayInboundHandler(
     companion object {
         private val logger = KotlinLogging.logger {}
     }
+
+    constructor(
+        outboundChannel: Channel, outbound: Outbound, connectTo: ConnectTo, firstPackage: Boolean = false
+    ) : this(
+        outboundChannel, outbound.trojanSetting!!, TrojanRequest(
+            Socks5CommandType.CONNECT.byteValue(),
+            connectTo.addressType().byteValue(),
+            connectTo.address,
+            connectTo.port
+        ), firstPackage = firstPackage
+    )
 
     /**
      * Trojan protocol only need package once, then send origin data directly

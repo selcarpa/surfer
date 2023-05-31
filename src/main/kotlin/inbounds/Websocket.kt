@@ -8,24 +8,36 @@ import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.websocketx.*
+import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import mu.KotlinLogging
 
-class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit) : ChannelDuplexHandler() {
+class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit) :
+    ChannelDuplexHandler() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
 
+    private var continuationBuffer: ByteBuf? = null
+
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
         if (evt is WebSocketServerProtocolHandler.HandshakeComplete) {
-            logger.debug("WebsocketInbound HandshakeComplete")
+            logger.trace("WebsocketInbound HandshakeComplete")
             handshakeCompleteCallBack(ctx, evt)
         }
         super.userEventTriggered(ctx, evt)
     }
 
+    override fun channelInactive(ctx: ChannelHandlerContext) {
+        if (continuationBuffer != null) {
+            ReferenceCountUtil.release(continuationBuffer)
+            continuationBuffer = null
+        }
+        super.channelInactive(ctx)
+    }
+
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        logger.debug("WebsocketInbound receive message:${msg.javaClass.name}")
+        logger.trace("WebsocketInbound receive message:${msg.javaClass.name}")
         when (msg) {
             is FullHttpRequest -> {
                 //ignored
@@ -44,12 +56,36 @@ class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: Channe
             }
 
             is TextWebSocketFrame -> {
-                logger.debug("WebsocketInbound receive message:${msg.javaClass.name} ${msg.text()}")
+                logger.trace("WebsocketInbound receive message:${msg.javaClass.name} ${msg.text()}")
             }
 
             is BinaryWebSocketFrame -> {
-                logger.debug("WebsocketInbound receive message:{}, pipeline handlers:{}", msg.javaClass.name, ctx.pipeline().names())
+                logger.trace(
+                    "WebsocketInbound receive message:{}, pipeline handlers:{}",
+                    msg.javaClass.name,
+                    ctx.pipeline().names()
+                )
                 ctx.fireChannelRead(msg.content())
+            }
+
+            is ContinuationWebSocketFrame -> {
+                if (msg.isFinalFragment) {
+                    if (continuationBuffer != null) {
+                        continuationBuffer!!.writeBytes(msg.content())
+                        ctx.fireChannelRead(continuationBuffer!!.copy())
+                        ReferenceCountUtil.release(continuationBuffer)
+                        continuationBuffer = null
+                    } else {
+                        ctx.fireChannelRead(msg.content())
+                    }
+                } else {
+                    if (continuationBuffer == null) {
+                        continuationBuffer = ctx.alloc().buffer()
+                    }
+                    continuationBuffer!!.writeBytes(msg.content())
+                }
+
+
             }
 
             else -> {
@@ -74,9 +110,11 @@ object Websocket {
                 ctx.write(binaryWebSocketFrame).addListener {
                     FutureListener<Unit> {
                         if (!it.isSuccess) {
-                            logger.error("write message:${msg.javaClass.name} to ${
-                                ctx.channel().id().asShortText()
-                            } failed ${ctx.channel().pipeline().names()}", it.cause())
+                            logger.error(
+                                "write message:${msg.javaClass.name} to ${
+                                    ctx.channel().id().asShortText()
+                                } failed ${ctx.channel().pipeline().names()}", it.cause()
+                            )
                         }
                     }
                 }

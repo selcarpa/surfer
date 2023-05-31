@@ -9,13 +9,14 @@ import io.netty.handler.codec.http.*
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.handler.stream.ChunkedWriteHandler
 import model.config.Inbound
+import model.protocol.ConnectTo
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
-import outbounds.GalaxyOutbound
-import outbounds.Trojan
+import outbounds.TrojanRelayInboundHandler
 import outbounds.byteBuf2TrojanPackage
 import route.Route
+import stream.Surfer
 import utils.SurferUtils
 import java.net.URI
 
@@ -54,59 +55,61 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
         }
         logger.debug("http proxy outbound from {}, content: {}", originCTX.channel().id().asShortText(), request)
         resolveOutbound.ifPresent { outbound ->
+            val connectTo = ConnectTo(uri.host, port)
             when (outbound.protocol) {
                 "galaxy" -> {
-                    GalaxyOutbound.outbound(originCTX, outbound, uri.host, port, {
-                        // If you want to implement http capture, to code right here
-                        it.pipeline().addFirst(
-                            HttpClientCodec(),
-                            HttpContentDecompressor(),
-                            ChunkedWriteHandler(),
-                        )
-                        it.writeAndFlush(request)
-                    }, {
-                        originCTX.close()
-                    })
+                    Surfer.relayAndOutbound(originCTX = originCTX,
+                        outbound = outbound, connectEstablishedCallback = {
+                            // If you want to implement http capture, to code right here
+                            it.pipeline().addFirst(
+                                HttpClientCodec(),
+                                HttpContentDecompressor(),
+                                ChunkedWriteHandler(),
+                            )
+                            it.writeAndFlush(request)
+                        }, connectFail = {
+                            originCTX.close()
+
+                        }, connectTo = connectTo
+                    )
                 }
 
                 "trojan" -> {
-                    Trojan.outbound(originCTX,
-                        outbound,
-                        SurferUtils.getAddressType(uri.host).byteValue(),
-                        uri.host,
-                        port,
-                        {
-                            // If you want to implement http capture, to code right here
+                    Surfer.relayAndOutbound(originCTX, {
+                        TrojanRelayInboundHandler(
+                            it, outbound, ConnectTo(uri.host, uri.port), firstPackage = true
+                        )
+                    }, outbound, {
+                        // If you want to implement http capture, to code right here
 
-                            val ch = EmbeddedChannel(HttpRequestEncoder())
-                            ch.writeOutbound(request)
-                            val encoded = ch.readOutbound<ByteBuf>()
-                            ch.close()
+                        val ch = EmbeddedChannel(HttpRequestEncoder())
+                        ch.writeOutbound(request)
+                        val encoded = ch.readOutbound<ByteBuf>()
+                        ch.close()
 
-                            it.writeAndFlush(
-                                TrojanPackage.toByteBuf(
-                                    byteBuf2TrojanPackage(
-                                        encoded, outbound.trojanSetting!!, TrojanRequest(
-                                            Socks5CommandType.CONNECT.byteValue(),
-                                            SurferUtils.getAddressType(uri.host).byteValue(),
-                                            uri.host,
-                                            port
-                                        )
+                        it.writeAndFlush(
+                            TrojanPackage.toByteBuf(
+                                byteBuf2TrojanPackage(
+                                    encoded, outbound.trojanSetting!!, TrojanRequest(
+                                        Socks5CommandType.CONNECT.byteValue(),
+                                        SurferUtils.getAddressType(uri.host).byteValue(),
+                                        uri.host,
+                                        port
                                     )
                                 )
-                            ).also {
-                                //remove all listener
-                                val pipeline = originCTX.pipeline()
-                                while (pipeline.first() != null) {
-                                    pipeline.removeFirst()
-                                }
+                            )
+                        ).also {
+                            //remove all listener
+                            val pipeline = originCTX.pipeline()
+                            while (pipeline.first() != null) {
+                                pipeline.removeFirst()
                             }
-                        },
-                        {
-                            originCTX.close()
-                        },
-//                        firstPackage = false
-                    )
+                        }
+                    }, {
+                        //ignored
+                    }, {
+                        originCTX.close()
+                    }, connectTo)
                 }
 
                 else -> {
@@ -136,35 +139,11 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
             else -> uri.port
         }
         resolveOutbound.ifPresent { outbound ->
+            val connectTo = ConnectTo(uri.host, port)
             when (outbound.protocol) {
                 "galaxy" -> {
-                    GalaxyOutbound.outbound(originCTX, outbound, uri.host, port, {
-                        //write Connection Established
-                        originCTX.writeAndFlush(
-                            DefaultHttpResponse(
-                                request.protocolVersion(),
-                                HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
-                            )
-                        ).also {
-                            //remove all listener
-                            val pipeline = originCTX.pipeline()
-                            while (pipeline.first() != null) {
-                                pipeline.removeFirst()
-                            }
-                        }
-                    }, {
-                        //todo: When the remote cannot be connected, the origin needs to be notified correctly
-                        logger.warn { "from id: ${originCTX.channel().id().asShortText()}, connect to remote fail" }
-                    })
-                }
-
-                "trojan" -> {
-                    Trojan.outbound(originCTX,
-                        outbound,
-                        SurferUtils.getAddressType(uri.host).byteValue(),
-                        uri.host,
-                        port,
-                        {
+                    Surfer.relayAndOutbound(originCTX = originCTX,
+                        outbound = outbound, connectEstablishedCallback = {
                             //write Connection Established
                             originCTX.writeAndFlush(
                                 DefaultHttpResponse(
@@ -178,10 +157,41 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                                     pipeline.removeFirst()
                                 }
                             }
-                        },
-                        {
+                        }, connectFail = {
+                            //todo: When the remote cannot be connected, the origin needs to be notified correctly
+                            logger.warn { "from id: ${originCTX.channel().id().asShortText()}, connect to remote fail" }
+                        }, connectTo = connectTo
+                    )
+                }
+
+                "trojan" -> {
+                    Surfer.relayAndOutbound(originCTX, {
+                        TrojanRelayInboundHandler(
+                            it, outbound, ConnectTo(uri.host, uri.port), firstPackage = true
+                        )
+                    },
+
+                        outbound, {
+                            //write Connection Established
+                            originCTX.writeAndFlush(
+                                DefaultHttpResponse(
+                                    request.protocolVersion(),
+                                    HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
+                                )
+                            ).also {
+                                //remove all listener
+                                val pipeline = originCTX.pipeline()
+                                while (pipeline.first() != null) {
+                                    pipeline.removeFirst()
+                                }
+                            }
+                        }, {
+                            //ignored
+                        }, {
                             originCTX.close()
-                        })
+                        }, connectTo
+                    )
+
                 }
 
                 else -> {
