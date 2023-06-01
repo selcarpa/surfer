@@ -33,7 +33,8 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                 val connectTo = ConnectTo(trojanPackage.request.host, trojanPackage.request.port)
                 when (outbound.protocol) {
                     "galaxy" -> {
-                        Surfer.relayAndOutbound(originCTX = originCTX,
+                        Surfer.relayAndOutbound(
+                            originCTX = originCTX,
                             outbound = outbound,
                             connectEstablishedCallback = {
                                 val payload = Unpooled.buffer()

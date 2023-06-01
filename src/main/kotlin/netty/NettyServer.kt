@@ -17,10 +17,8 @@ import kotlin.system.exitProcess
 /**
  * netty server runner
  */
-class NettyServer {
-    companion object {
-        private val logger = KotlinLogging.logger {}
-    }
+object NettyServer {
+    private val logger = KotlinLogging.logger {}
 
     private val bossGroup: EventLoopGroup = NioEventLoopGroup()
     private val workerGroup: EventLoopGroup = NioEventLoopGroup()
