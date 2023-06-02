@@ -18,6 +18,8 @@ import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketCl
 import io.netty.handler.logging.ByteBufFormat
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.proxy.HttpProxyHandler
+import io.netty.handler.proxy.ProxyConnectionEvent
+import io.netty.handler.proxy.ProxyHandler
 import io.netty.handler.proxy.Socks5ProxyHandler
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
@@ -27,6 +29,7 @@ import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
 import model.LogLevel
+import model.PROXY_HANDLER_NAME
 import model.RELAY_HANDLER_NAME
 import model.config.ConfigurationSettings.Companion.Configuration
 import model.config.HttpOutboundSetting
@@ -111,55 +114,32 @@ object Surfer {
         }
     }
 
+    private fun galaxy(
+        connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress, eventLoopGroup: EventLoopGroup
+    ) {
+        connect(eventLoopGroup, connectListener, null, socketAddress)
+    }
+
     private fun httpStream(
         connectListener: FutureListener<Channel>,
         httpOutboundSetting: HttpOutboundSetting,
         eventLoopGroup: EventLoopGroup,
         socketAddress: InetSocketAddress
     ) {
-        val b = Bootstrap()
-        val promise = eventLoopGroup.next().newPromise<Channel>()
-        promise.addListener(connectListener)
-        b.group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
-            .handler(
-                LoggingHandler(
-                    "Socks5_Logger",
-                    LogLevel.by(Configuration.log.level).toNettyLogLevel(),
-                    ByteBufFormat.HEX_DUMP
+        val proxyHandler = if (httpOutboundSetting.auth == null) {
+            HttpProxyHandler(
+                InetSocketAddress(
+                    httpOutboundSetting.host, httpOutboundSetting.port
                 )
-            ).handler(
-                if (httpOutboundSetting.auth == null) {
-                    HttpProxyHandler(InetSocketAddress(httpOutboundSetting.host, httpOutboundSetting.port))
-                } else {
-                    HttpProxyHandler(
-                        InetSocketAddress(httpOutboundSetting.host, httpOutboundSetting.port),
-                        httpOutboundSetting.auth.username,
-                        httpOutboundSetting.auth.password
-                    )
-                }
-            ).handler(object : ChannelDuplexHandler() {
-                override fun channelActive(ctx: ChannelHandlerContext) {
-                    logger.debug { "http channelActive" }
-                    super.channelActive(ctx)
-                    promise.setSuccess(ctx.channel())
-                }
-
-                override fun write(ctx: ChannelHandlerContext?, msg: Any?, promise: ChannelPromise?) {
-                    logger.debug { "http write: $msg" }
-                    super.write(ctx, msg, promise)
-                }
-
-                override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-                    logger.trace(
-                        "[{}], http read {}, pipelines: {}",
-                        ctx.channel().id().asShortText(),
-                        msg,
-                        ctx.channel().pipeline().names()
-                    )
-                    super.channelRead(ctx, msg)
-                }
-            })
-        b.connect(socketAddress)
+            )
+        } else {
+            HttpProxyHandler(
+                InetSocketAddress(httpOutboundSetting.host, httpOutboundSetting.port),
+                httpOutboundSetting.auth.username,
+                httpOutboundSetting.auth.password
+            )
+        }
+        connect(eventLoopGroup, connectListener, proxyHandler, socketAddress)
     }
 
     private fun socks5Stream(
@@ -168,82 +148,72 @@ object Surfer {
         eventLoopGroup: EventLoopGroup,
         socketAddress: InetSocketAddress
     ) {
-        val b = Bootstrap()
-        val promise = eventLoopGroup.next().newPromise<Channel>()
-        promise.addListener(connectListener)
-        b.group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
-            .handler(
-                LoggingHandler(
-                    "Socks5_Logger",
-                    LogLevel.by(Configuration.log.level).toNettyLogLevel(),
-                    ByteBufFormat.SIMPLE
-                )
-            ).handler(
-                if (socks5OutboundSetting.auth == null) {
-                    Socks5ProxyHandler(InetSocketAddress(socks5OutboundSetting.host, socks5OutboundSetting.port))
-                } else {
-                    Socks5ProxyHandler(
-                        InetSocketAddress(socks5OutboundSetting.host, socks5OutboundSetting.port),
-                        socks5OutboundSetting.auth.username,
-                        socks5OutboundSetting.auth.password
-                    )
-                }
-            ).handler(object : ChannelDuplexHandler() {
-                override fun channelActive(ctx: ChannelHandlerContext) {
-                    logger.debug { "socks5 channelActive" }
-                    super.channelActive(ctx)
-                    promise.setSuccess(ctx.channel())
-                }
-
-                override fun write(ctx: ChannelHandlerContext?, msg: Any?, promise: ChannelPromise?) {
-                    logger.debug { "socks5 write: $msg" }
-                    super.write(ctx, msg, promise)
-                }
-
-                override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-                    logger.trace(
-                        "[{}], socks5 read {}, pipelines: {}",
-                        ctx.channel().id().asShortText(),
-                        msg,
-                        ctx.channel().pipeline().names()
-                    )
-                    super.channelRead(ctx, msg)
-                }
-            })
-        println(b.connect(socketAddress).channel().pipeline().names())
-    }
-
-    private fun galaxy(
-        connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress, eventLoopGroup: EventLoopGroup
-    ) {
-        val b = Bootstrap()
-        val promise = eventLoopGroup.next().newPromise<Channel>()
-        promise.addListener(connectListener)
-        b.group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
-            .handler(
-                LoggingHandler(
-                    "Galaxy_Logger",
-                    LogLevel.by(Configuration.log.level).toNettyLogLevel(),
-                    ByteBufFormat.HEX_DUMP
+        val proxyHandler = if (socks5OutboundSetting.auth == null) {
+            Socks5ProxyHandler(
+                InetSocketAddress(
+                    socks5OutboundSetting.host, socks5OutboundSetting.port
                 )
             )
-            .handler(object : ChannelInboundHandlerAdapter() {
-                override fun channelActive(ctx: ChannelHandlerContext) {
-                    super.channelActive(ctx)
-                    promise.setSuccess(ctx.channel())
+        } else {
+            Socks5ProxyHandler(
+                InetSocketAddress(socks5OutboundSetting.host, socks5OutboundSetting.port),
+                socks5OutboundSetting.auth.username,
+                socks5OutboundSetting.auth.password
+            )
+        }
+        connect(eventLoopGroup, connectListener, proxyHandler, socketAddress)
+    }
+
+    private fun connect(
+        eventLoopGroup: EventLoopGroup,
+        connectListener: FutureListener<Channel>,
+        proxyHandler: ProxyHandler?,
+        socketAddress: InetSocketAddress
+    ) {
+        val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
+        Bootstrap().group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
+            .handler(
+                LoggingHandler(
+                    "CONNECT_LOGGER", LogLevel.by(Configuration.log.level).toNettyLogLevel(), ByteBufFormat.SIMPLE
+                )
+            ).handler(object : ChannelInitializer<Channel>() {
+                override fun initChannel(ch: Channel) {
+                    if (proxyHandler != null) {
+                        ch.pipeline().addLast(
+                            PROXY_HANDLER_NAME, proxyHandler
+                        )
+                    }
+                    ch.pipeline().addLast(object : ChannelDuplexHandler() {
+                        override fun channelActive(ctx: ChannelHandlerContext) {
+                            super.channelActive(ctx)
+                            promise.setSuccess(ctx.channel())
+                        }
+
+                        override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
+                            if (evt is ProxyConnectionEvent) {
+                                logger.trace { "ProxyConnectionEvent: $evt" }
+                            }
+                            ctx.fireUserEventTriggered(evt)
+                        }
+
+                        override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+                            logger.trace(
+                                "[{}], galaxy read {}, pipelines: {}",
+                                ctx.channel().id().asShortText(),
+                                msg,
+                                ctx.channel().pipeline().names()
+                            )
+                            super.channelRead(ctx, msg)
+                        }
+
+                        @Suppress("OVERRIDE_DEPRECATION")
+                        override fun exceptionCaught(ctx: ChannelHandlerContext?, cause: Throwable?) {
+                            logger.error(cause) { "proxy exceptionCaught" }
+                        }
+                    })
                 }
 
-                override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-                    logger.trace(
-                        "[{}], galaxy read {}, pipelines: {}",
-                        ctx.channel().id().asShortText(),
-                        msg,
-                        ctx.channel().pipeline().names()
-                    )
-                    super.channelRead(ctx, msg)
-                }
-            })
-        b.connect(socketAddress)
+            }).connect(socketAddress)
     }
 
     private fun wsStream(

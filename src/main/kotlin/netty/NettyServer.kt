@@ -28,7 +28,7 @@ object NettyServer {
             .channel(NioServerSocketChannel::class.java).option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
             .handler(
                 LoggingHandler(
-                    "Main_Natty_Logger",
+                    "MAIN_NATTY_LOGGER",
                     LogLevel.by(Configuration.log.level).toNettyLogLevel(),
                     ByteBufFormat.SIMPLE
                 )
