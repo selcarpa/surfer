@@ -11,6 +11,7 @@ import ch.qos.logback.core.ConsoleAppender
 import ch.qos.logback.core.rolling.RollingFileAppender
 import ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy
 import ch.qos.logback.core.util.FileSize
+import model.LogLevel
 import model.config.ConfigurationSettings.Companion.Configuration
 import org.slf4j.LoggerFactory
 import java.io.File
@@ -28,13 +29,13 @@ fun loadLogConfig() {
 
     val logConfiguration = Configuration.log
     // set log level
-    log.level = (if (logConfiguration == null) Level.INFO else Level.toLevel(logConfiguration.level))
+    log.level = LogLevel.by(logConfiguration.level).toLogBackLevel()
 
     // default console print
     val logEncoder = PatternLayoutEncoder()
     logEncoder.context = logCtx
     logEncoder.pattern =
-        logConfiguration?.pattern ?: "%date{ISO8601} %highlight(%level) [%t] %cyan(%logger{16}) %M: %msg%n"
+        logConfiguration.pattern
     logEncoder.charset = StandardCharsets.UTF_8
     logEncoder.start()
 
@@ -55,7 +56,7 @@ fun loadLogConfig() {
 
 
     //if log configuration is null, use default configuration
-    if (logConfiguration != null && logConfiguration.fileName.isNotEmpty()) {
+    if (logConfiguration.fileName.isNotEmpty()) {
 
 
         val rollingFileAppender: RollingFileAppender<*> = RollingFileAppender<Any?>()

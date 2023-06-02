@@ -25,7 +25,7 @@ java -jar surfer.jar -c=config.json
 ```json5
 {
   log: {
-    //supported level(ignore case): OFF, ERROR, WARN, INFO, DEBUG, TRACE, ALL,
+    //supported level(ignore case): OFF, ERROR, WARN, INFO, DEBUG, TRACE,
     level: "debug",
     //log format (refer: https://logback.qos.ch/manual/layouts.html#conversionWord)
     pattern: "%date{ISO8601} %level [%t] %logger{16} %M: %msg%n",

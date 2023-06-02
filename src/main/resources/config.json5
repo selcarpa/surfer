@@ -1,5 +1,19 @@
 {
   log: {
-    level: "info"
-  }
+    level: "info",
+    fileName: "info"
+  },
+  "inbounds": [
+    {
+      "port": 14270,
+      "protocol": "socks5",
+      "socks5Setting": {
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "galaxy"
+    }
+  ]
 }

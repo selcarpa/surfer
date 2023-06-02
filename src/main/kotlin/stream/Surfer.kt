@@ -16,7 +16,6 @@ import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.websocketx.*
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
 import io.netty.handler.logging.ByteBufFormat
-import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.proxy.HttpProxyHandler
 import io.netty.handler.proxy.Socks5ProxyHandler
@@ -27,7 +26,9 @@ import io.netty.util.CharsetUtil
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
+import model.LogLevel
 import model.RELAY_HANDLER_NAME
+import model.config.ConfigurationSettings.Companion.Configuration
 import model.config.HttpOutboundSetting
 import model.config.Outbound
 import model.config.Sock5OutboundSetting
@@ -62,8 +63,9 @@ object Surfer {
                         outboundChannel.pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(originCTX.channel()))
                         originCTX.pipeline().addLast(RELAY_HANDLER_NAME, originCTXRelayHandler(outboundChannel))
                         afterAddRelayHandler(outboundChannel)
+                    } else {
+                        logger.error(it.cause()) { "connectEstablishedCallback fail: ${it.cause().message}" }
                     }
-                    logger.error(it.cause()) { "connectEstablishedCallback fail: ${it.cause().message}" }
                 })
             } else {
                 connectFail()
@@ -119,7 +121,13 @@ object Surfer {
         val promise = eventLoopGroup.next().newPromise<Channel>()
         promise.addListener(connectListener)
         b.group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
-            .handler(LoggingHandler("socks5 logger", LogLevel.DEBUG, ByteBufFormat.HEX_DUMP)).handler(
+            .handler(
+                LoggingHandler(
+                    "Socks5_Logger",
+                    LogLevel.by(Configuration.log.level).toNettyLogLevel(),
+                    ByteBufFormat.HEX_DUMP
+                )
+            ).handler(
                 if (httpOutboundSetting.auth == null) {
                     HttpProxyHandler(InetSocketAddress(httpOutboundSetting.host, httpOutboundSetting.port))
                 } else {
@@ -164,7 +172,13 @@ object Surfer {
         val promise = eventLoopGroup.next().newPromise<Channel>()
         promise.addListener(connectListener)
         b.group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
-                .handler(LoggingHandler("socks5 logger", LogLevel.DEBUG, ByteBufFormat.HEX_DUMP)).handler(
+            .handler(
+                LoggingHandler(
+                    "Socks5_Logger",
+                    LogLevel.by(Configuration.log.level).toNettyLogLevel(),
+                    ByteBufFormat.SIMPLE
+                )
+            ).handler(
                 if (socks5OutboundSetting.auth == null) {
                     Socks5ProxyHandler(InetSocketAddress(socks5OutboundSetting.host, socks5OutboundSetting.port))
                 } else {
@@ -196,7 +210,7 @@ object Surfer {
                     super.channelRead(ctx, msg)
                 }
             })
-        b.connect(socketAddress)
+        println(b.connect(socketAddress).channel().pipeline().names())
     }
 
     private fun galaxy(
@@ -206,7 +220,13 @@ object Surfer {
         val promise = eventLoopGroup.next().newPromise<Channel>()
         promise.addListener(connectListener)
         b.group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
-            .handler(LoggingHandler("galaxy logger", LogLevel.DEBUG, ByteBufFormat.HEX_DUMP))
+            .handler(
+                LoggingHandler(
+                    "Galaxy_Logger",
+                    LogLevel.by(Configuration.log.level).toNettyLogLevel(),
+                    ByteBufFormat.HEX_DUMP
+                )
+            )
             .handler(object : ChannelInboundHandlerAdapter() {
                 override fun channelActive(ctx: ChannelHandlerContext) {
                     super.channelActive(ctx)

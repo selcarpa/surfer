@@ -4,8 +4,15 @@ import com.google.gson.Gson
 import java.io.File
 
 data class ConfigurationSettings(
-        val log: LogConfiguration?, val inbounds: List<Inbound>, val outbounds: List<Outbound>,
+    val inbounds: List<Inbound>, val outbounds: List<Outbound>,
 ) {
+    var log: LogConfiguration = LogConfiguration()
+        get() = if (field == null) {
+            LogConfiguration()
+        } else {
+            field
+        }
+
     companion object {
         var ConfigurationUrl: String? = null
         val Configuration: ConfigurationSettings by lazy { initConfiguration() }
@@ -29,7 +36,7 @@ data class Inbound(val port: Int, val protocol: String, val inboundStreamBy: Inb
 data class Socks5Setting(val auth: Auth?)
 data class Auth(val password: String, val username: String)
 data class Outbound(val protocol: String, val trojanSetting: TrojanSetting?, val outboundStreamBy: OutboundStreamBy?)
-data class OutboundStreamBy(val type: String, val wsOutboundSetting: WsOutboundSetting?,val sock5OutboundSetting: Sock5OutboundSetting?,val httpOutboundSetting: HttpOutboundSetting)
+data class OutboundStreamBy(val type: String, val wsOutboundSetting: WsOutboundSetting?,val sock5OutboundSetting: Sock5OutboundSetting?,val httpOutboundSetting: HttpOutboundSetting?)
 
 data class Sock5OutboundSetting(val auth: Auth?,val port:Int,val host:String)
 data class HttpOutboundSetting(val auth: Auth?,val port:Int,val host:String)
