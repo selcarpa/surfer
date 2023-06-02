@@ -13,7 +13,7 @@ data class TrojanPackage(val hexSha224Password: String, val request: TrojanReque
     companion object {
         fun parse(byteBuf: ByteBuf): TrojanPackage {
             //hex(SHA224(password)) 56
-            val hexSha224Password = ByteBufUtil.hexDump(byteBuf.readBytes(56))
+            val hexSha224Password = ByteBufUtil.hexDump(byteBuf.readSlice(56))
             //CRLF  2
             byteBuf.skipBytes(2)
             //Trojan Request
