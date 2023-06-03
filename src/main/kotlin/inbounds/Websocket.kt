@@ -22,7 +22,6 @@ class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: Channe
 
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
         if (evt is WebSocketServerProtocolHandler.HandshakeComplete) {
-            logger.trace("WebsocketInbound HandshakeComplete")
             handshakeCompleteCallBack(ctx, evt)
         }
         super.userEventTriggered(ctx, evt)
@@ -90,6 +89,7 @@ class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: Channe
 
             else -> {
                 logger.error("WebsocketInbound receive unknown message:${msg.javaClass.name}")
+                ReferenceCountUtil.release(msg)
             }
         }
     }
@@ -106,9 +106,11 @@ object Websocket {
     fun websocketWrite(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         when (msg) {
             is ByteBuf -> {
-                val binaryWebSocketFrame = BinaryWebSocketFrame(msg.copy())
+                //todo: fix leak
+                val binaryWebSocketFrame = BinaryWebSocketFrame(msg)
                 ctx.write(binaryWebSocketFrame).addListener {
                     FutureListener<Unit> {
+                        ReferenceCountUtil.release(binaryWebSocketFrame)
                         if (!it.isSuccess) {
                             logger.error(
                                 "write message:${msg.javaClass.name} to ${

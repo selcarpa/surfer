@@ -2,14 +2,14 @@ package netty
 
 
 import io.netty.bootstrap.ServerBootstrap
-import io.netty.buffer.PooledByteBufAllocator
+import io.netty.buffer.UnpooledByteBufAllocator
 import io.netty.channel.ChannelOption
 import io.netty.channel.EventLoopGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.logging.ByteBufFormat
+import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
-import model.LogLevel
 import model.config.ConfigurationSettings.Companion.Configuration
 import mu.KotlinLogging
 import java.util.*
@@ -24,15 +24,12 @@ object NettyServer {
     private val bossGroup: EventLoopGroup = NioEventLoopGroup()
     private val workerGroup: EventLoopGroup = NioEventLoopGroup()
     fun start() {
-        val bootstrap = ServerBootstrap().group(bossGroup, workerGroup) // 绑定线程池
-            .channel(NioServerSocketChannel::class.java).option(ChannelOption.ALLOCATOR, PooledByteBufAllocator.DEFAULT)
-            .handler(
-                LoggingHandler(
-                    "MAIN_NATTY_LOGGER",
-                    LogLevel.by(Configuration.log.level).toNettyLogLevel(),
-                    ByteBufFormat.SIMPLE
-                )
-            ).childHandler(ProxyChannelInitializer()).option(ChannelOption.SO_BACKLOG, 65536)
+        val bootstrap = ServerBootstrap().group(bossGroup, workerGroup)
+            .channel(NioServerSocketChannel::class.java)
+            .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+            .childHandler(ProxyChannelInitializer())
+            .option(ChannelOption.SO_BACKLOG, 65536)
+            .option(ChannelOption.ALLOCATOR, UnpooledByteBufAllocator.DEFAULT)
             .childOption(ChannelOption.SO_KEEPALIVE, true)
         Optional.ofNullable(Configuration.inbounds).ifPresent {
             it.stream().forEach { inbound ->

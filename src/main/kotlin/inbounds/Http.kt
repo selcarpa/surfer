@@ -13,8 +13,8 @@ import model.protocol.ConnectTo
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
-import outbounds.TrojanRelayInboundHandler
-import outbounds.byteBuf2TrojanPackage
+import protocol.TrojanRelayInboundHandler
+import protocol.byteBuf2TrojanPackage
 import route.Route
 import stream.Surfer
 import utils.SurferUtils

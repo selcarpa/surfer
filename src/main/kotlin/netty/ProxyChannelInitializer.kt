@@ -3,7 +3,6 @@ package netty
 
 import inbounds.HttpProxyServerHandler
 import inbounds.SocksServerHandler
-import inbounds.TrojanInboundHandler
 import inbounds.WebsocketDuplexHandler
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInitializer
@@ -17,6 +16,7 @@ import io.netty.handler.stream.ChunkedWriteHandler
 import model.config.ConfigurationSettings.Companion.Configuration
 import model.config.Inbound
 import mu.KotlinLogging
+import protocol.TrojanInboundHandler
 import java.util.function.Function
 import java.util.stream.Collectors
 

@@ -17,16 +17,6 @@ enum class LogLevel {
         }
     }
 
-
-    fun toNettyLogLevel(): io.netty.handler.logging.LogLevel? = when (this) {
-        TRACE -> io.netty.handler.logging.LogLevel.TRACE
-        DEBUG -> io.netty.handler.logging.LogLevel.DEBUG
-        INFO -> io.netty.handler.logging.LogLevel.INFO
-        WARN -> io.netty.handler.logging.LogLevel.WARN
-        ERROR -> io.netty.handler.logging.LogLevel.ERROR
-        else -> null
-    }
-
     fun toLogBackLevel(): ch.qos.logback.classic.Level = when (this) {
         TRACE -> ch.qos.logback.classic.Level.TRACE
         DEBUG -> ch.qos.logback.classic.Level.DEBUG

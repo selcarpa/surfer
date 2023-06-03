@@ -16,6 +16,7 @@ import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.websocketx.*
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
 import io.netty.handler.logging.ByteBufFormat
+import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.proxy.HttpProxyHandler
 import io.netty.handler.proxy.ProxyConnectionEvent
@@ -28,10 +29,8 @@ import io.netty.util.CharsetUtil
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
-import model.LogLevel
 import model.PROXY_HANDLER_NAME
 import model.RELAY_HANDLER_NAME
-import model.config.ConfigurationSettings.Companion.Configuration
 import model.config.HttpOutboundSetting
 import model.config.Outbound
 import model.config.Sock5OutboundSetting
@@ -172,11 +171,8 @@ object Surfer {
     ) {
         val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
         Bootstrap().group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
-            .handler(
-                LoggingHandler(
-                    "CONNECT_LOGGER", LogLevel.by(Configuration.log.level).toNettyLogLevel(), ByteBufFormat.SIMPLE
-                )
-            ).handler(object : ChannelInitializer<Channel>() {
+            .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+            .handler(object : ChannelInitializer<Channel>() {
                 override fun initChannel(ch: Channel) {
                     if (proxyHandler != null) {
                         ch.pipeline().addLast(
@@ -413,6 +409,22 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
         if (relayChannel.isActive) {
             logger.debug("[{}]  close channel, write close to relay channel", relayChannel.id().asShortText())
             relayChannel.pipeline().remove(RELAY_HANDLER_NAME)
+            //add a discard handler to discard all message
+            relayChannel.pipeline().addLast(object : ChannelInboundHandlerAdapter() {
+                override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+                    // Discard the received data silently.
+                    (msg as ByteBuf).release()
+                }
+
+                override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+                    logger.error(
+                        "relay inbound handler exception caught, [${ctx.channel().id()}], pipeline: ${
+                            ctx.channel().pipeline().names()
+                        }, message: ${cause.message}", cause
+                    )
+                    ctx.close()
+                }
+            })
             ChannelUtils.closeOnFlush(relayChannel)
             inActiveCallBack()
         }

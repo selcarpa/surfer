@@ -11,7 +11,7 @@ import io.netty.handler.codec.socksx.v5.*
 import model.config.Inbound
 import model.protocol.ConnectTo
 import mu.KotlinLogging
-import outbounds.TrojanRelayInboundHandler
+import protocol.TrojanRelayInboundHandler
 import route.Route
 import stream.Surfer
 import utils.ChannelUtils
