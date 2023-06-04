@@ -71,7 +71,7 @@ class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: Channe
                 if (msg.isFinalFragment) {
                     if (continuationBuffer != null) {
                         continuationBuffer!!.writeBytes(msg.content())
-                        ctx.fireChannelRead(continuationBuffer!!.copy())
+                        ctx.fireChannelRead(ReferenceCountUtil.releaseLater(continuationBuffer!!.copy()))
                         ReferenceCountUtil.release(continuationBuffer)
                         continuationBuffer = null
                     } else {

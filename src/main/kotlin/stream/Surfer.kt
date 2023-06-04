@@ -335,7 +335,7 @@ class WebSocketClientHandler(
                     ctx.pipeline().names()
                 )
                 //copy the content to avoid release this handler
-                ctx.fireChannelRead(msg.content().copy())
+                ctx.fireChannelRead(ReferenceCountUtil.releaseLater(msg.content().copy()))
             }
 
             is ByteBuf -> {
@@ -346,7 +346,7 @@ class WebSocketClientHandler(
                     msg.javaClass.name,
                     ctx.pipeline().names()
                 )
-                ctx.fireChannelRead(msg.copy())
+                ctx.fireChannelRead(ReferenceCountUtil.releaseLater(msg.copy()))
 
             }
         }

@@ -8,6 +8,7 @@ import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.*
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.handler.stream.ChunkedWriteHandler
+import io.netty.util.ReferenceCountUtil
 import model.config.Inbound
 import model.protocol.ConnectTo
 import model.protocol.TrojanPackage
@@ -99,6 +100,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                                 )
                             )
                         ).also {
+                            ReferenceCountUtil.release(encoded)
                             //remove all listener
                             val pipeline = originCTX.pipeline()
                             while (pipeline.first() != null) {

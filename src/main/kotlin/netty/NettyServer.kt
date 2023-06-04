@@ -28,9 +28,7 @@ object NettyServer {
             .channel(NioServerSocketChannel::class.java)
             .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
             .childHandler(ProxyChannelInitializer())
-            .option(ChannelOption.SO_BACKLOG, 65536)
             .option(ChannelOption.ALLOCATOR, UnpooledByteBufAllocator.DEFAULT)
-            .childOption(ChannelOption.SO_KEEPALIVE, true)
         Optional.ofNullable(Configuration.inbounds).ifPresent {
             it.stream().forEach { inbound ->
                 bootstrap.bind(inbound.port).addListener { future ->

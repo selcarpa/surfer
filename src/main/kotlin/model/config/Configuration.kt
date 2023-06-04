@@ -6,7 +6,7 @@ import java.io.File
 data class ConfigurationSettings(
     val inbounds: List<Inbound>, val outbounds: List<Outbound>,
 ) {
-    var log: LogConfiguration = LogConfiguration()
+    var log: LogConfiguration = TODO("Here should be implemented in a more elegant way")
         get() = if (field == null) {
             LogConfiguration()
         } else {

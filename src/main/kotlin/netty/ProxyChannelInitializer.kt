@@ -5,6 +5,7 @@ import inbounds.HttpProxyServerHandler
 import inbounds.SocksServerHandler
 import inbounds.WebsocketDuplexHandler
 import io.netty.channel.ChannelHandlerContext
+import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.HttpContentCompressor
@@ -13,6 +14,8 @@ import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
 import io.netty.handler.stream.ChunkedWriteHandler
+import io.netty.handler.timeout.IdleStateEvent
+import io.netty.handler.timeout.IdleStateHandler
 import model.config.ConfigurationSettings.Companion.Configuration
 import model.config.Inbound
 import mu.KotlinLogging
@@ -32,6 +35,9 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
         val portInboundMap = Configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
         val inbound = portInboundMap[localAddress.port]
+        //todo: set idle timeout, and close channel
+        ch.pipeline().addFirst(IdleStateHandler(300,300,300))
+        ch.pipeline().addFirst(IdleCloseHandler())
         //todo refactor to strategy pattern
         if (inbound != null) {
             when (inbound.protocol) {
@@ -84,5 +90,20 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
     private fun initWebsocketInbound(ch: NioSocketChannel, path: String, handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit) {
         ch.pipeline().addLast(ChunkedWriteHandler(), HttpServerCodec(), HttpObjectAggregator(Int.MAX_VALUE), WebSocketServerProtocolHandler(path), WebsocketDuplexHandler(handshakeCompleteCallBack))
+    }
+}
+
+
+/**
+ * when channel idle, close it
+ */
+class IdleCloseHandler: ChannelInboundHandlerAdapter(){
+    override fun userEventTriggered(ctx: ChannelHandlerContext?, evt: Any?) {
+        when(evt){
+            is IdleStateEvent -> {
+                ctx?.close()
+            }
+        }
+        super.userEventTriggered(ctx, evt)
     }
 }

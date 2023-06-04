@@ -6,6 +6,7 @@ import io.netty.buffer.Unpooled
 import io.netty.handler.codec.socksx.v5.Socks5AddressDecoder
 import io.netty.handler.codec.socksx.v5.Socks5AddressEncoder
 import io.netty.handler.codec.socksx.v5.Socks5AddressType
+import io.netty.util.ReferenceCountUtil
 
 data class TrojanRequest(val cmd: Byte, val atyp: Byte, val host: String, val port: Int)
 
@@ -34,7 +35,7 @@ data class TrojanPackage(val hexSha224Password: String, val request: TrojanReque
         }
 
         fun toByteBuf(trojanPackage: TrojanPackage): ByteBuf {
-            val out = Unpooled.buffer()
+            val out = ReferenceCountUtil.releaseLater(Unpooled.buffer())
             out.writeBytes(trojanPackage.hexSha224Password.toByteArray())
             out.writeBytes(ByteBufUtil.decodeHexDump("0d0a"))
             out.writeByte(trojanPackage.request.cmd.toInt())
