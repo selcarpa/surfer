@@ -2,9 +2,9 @@ package netty
 
 
 import io.netty.bootstrap.ServerBootstrap
-import io.netty.buffer.UnpooledByteBufAllocator
 import io.netty.channel.ChannelOption
 import io.netty.channel.EventLoopGroup
+import io.netty.channel.PreferHeapByteBufAllocator
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.logging.ByteBufFormat
@@ -28,7 +28,7 @@ object NettyServer {
             .channel(NioServerSocketChannel::class.java)
             .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
             .childHandler(ProxyChannelInitializer())
-            .option(ChannelOption.ALLOCATOR, UnpooledByteBufAllocator.DEFAULT)
+            .option(ChannelOption.ALLOCATOR, PreferHeapByteBufAllocator.DEFAULT)
         Optional.ofNullable(Configuration.inbounds).ifPresent {
             it.stream().forEach { inbound ->
                 bootstrap.bind(inbound.port).addListener { future ->

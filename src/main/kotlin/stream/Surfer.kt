@@ -170,7 +170,7 @@ object Surfer {
         socketAddress: InetSocketAddress
     ) {
         val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
-        Bootstrap().group(eventLoopGroup).channel(NioSocketChannel::class.java).option(ChannelOption.TCP_NODELAY, true)
+        Bootstrap().group(eventLoopGroup).channel(NioSocketChannel::class.java)
             .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
             .handler(object : ChannelInitializer<Channel>() {
                 override fun initChannel(ch: Channel) {

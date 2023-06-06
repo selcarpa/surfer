@@ -1,4 +1,5 @@
 import log.loadLogConfig
+import log.startMemoryStatisticPrint
 import model.config.ConfigurationSettings.Companion.ConfigurationUrl
 import mu.KotlinLogging
 import netty.NettyServer
@@ -11,6 +12,9 @@ object MainKt {
         args.forEach {
             if (it.startsWith("-c=")) {
                 ConfigurationUrl = it.replace("-c=", "")
+            }
+            if(it.equals("-memstat")){
+                startMemoryStatisticPrint()
             }
         }
 
