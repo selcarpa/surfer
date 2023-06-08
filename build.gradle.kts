@@ -13,7 +13,7 @@ repositories {
 }
 
 dependencies {
-    implementation("io.netty:netty-all:4.1.90.Final")
+    implementation("io.netty:netty-all:4.1.93.Final")
     implementation("com.google.code.gson:gson:2.10.1")
 
     //kotlin-logging
