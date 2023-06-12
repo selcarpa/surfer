@@ -7,6 +7,7 @@ import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
+import io.netty.handler.codec.DecoderException
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.util.ReferenceCountUtil
 import model.config.Inbound
@@ -29,7 +30,13 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
 
     override fun channelRead0(originCTX: ChannelHandlerContext, msg: ByteBuf) {
         //parse trojan package
-        val trojanPackage = TrojanPackage.parse(msg)
+        val trojanPackage = try {
+            TrojanPackage.parse(msg)
+        } catch (e: DecoderException) {
+            logger.warn { "parse trojan package failed, ${e.message}" }
+            ReferenceCountUtil.release(msg)
+            return
+        }
 
         val trojanSetting = inbound.trojanSettings!!.stream().filter {
             ByteBufUtil.hexDump(Sha224Utils.encryptAndHex(it.password).toByteArray()) == trojanPackage.hexSha224Password
@@ -149,7 +156,6 @@ class TrojanRelayInboundHandler(
                     val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
                     super.channelRead(ctx, trojanByteBuf)
                     firstPackage = false
-                    ReferenceCountUtil.release(trojanByteBuf)
                 }
 
                 else -> {
