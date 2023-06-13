@@ -36,10 +36,10 @@ data class Inbound(val port: Int, val protocol: String, val inboundStreamBy: Inb
 data class Socks5Setting(val auth: Auth?)
 data class Auth(val password: String, val username: String)
 data class Outbound(val protocol: String, val trojanSetting: TrojanSetting?, val outboundStreamBy: OutboundStreamBy?)
-data class OutboundStreamBy(val type: String, val wsOutboundSetting: WsOutboundSetting?,val sock5OutboundSetting: Sock5OutboundSetting?,val httpOutboundSetting: HttpOutboundSetting?)
-
+data class OutboundStreamBy(val type: String, val wsOutboundSetting: WsOutboundSetting?,val sock5OutboundSetting: Sock5OutboundSetting?,val httpOutboundSetting: HttpOutboundSetting?,val tcpOutboundSetting:TcpOutboundSetting?)
 data class Sock5OutboundSetting(val auth: Auth?,val port:Int,val host:String)
 data class HttpOutboundSetting(val auth: Auth?,val port:Int,val host:String)
+data class TcpOutboundSetting(val port: Int, val host: String)
 data class InboundStreamBy(val type: String, val wsInboundSetting: WsInboundSetting)
 data class WsOutboundSetting(val path: String, val port: Int, val host: String)
 data class WsInboundSetting(val path: String)

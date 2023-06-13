@@ -19,8 +19,8 @@ import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.proxy.HttpProxyHandler
 import io.netty.handler.proxy.ProxyConnectionEvent
-import io.netty.handler.proxy.ProxyHandler
 import io.netty.handler.proxy.Socks5ProxyHandler
+import io.netty.handler.ssl.SslCompletionEvent
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
@@ -30,10 +30,7 @@ import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
 import model.PROXY_HANDLER_NAME
 import model.RELAY_HANDLER_NAME
-import model.config.HttpOutboundSetting
-import model.config.Outbound
-import model.config.Sock5OutboundSetting
-import model.config.WsOutboundSetting
+import model.config.*
 import model.protocol.ConnectTo
 import mu.KotlinLogging
 import protocol.DiscardHandler
@@ -93,11 +90,11 @@ object Surfer {
         }
         return when (outbound.outboundStreamBy.type) {
             "wss" -> wssStream(
-                connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup, socketAddress
+                connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup
             )
 
             "ws" -> wsStream(
-                connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup, socketAddress
+                connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup
             )
 
             "socks5" -> socks5Stream(
@@ -108,17 +105,62 @@ object Surfer {
                 connectListener, outbound.outboundStreamBy.httpOutboundSetting!!, eventLoopGroup, socketAddress
             )
 
+            "tcp" -> tcpStream(
+                connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup
+            )
+
+            "tls" -> tlsStream(
+                connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup
+            )
+
+
             else -> {
                 logger.error { "stream type ${outbound.outboundStreamBy.type} not supported" }
             }
         }
     }
 
+    private fun tlsStream(
+        connectListener: FutureListener<Channel>,
+        tcpOutboundSetting: TcpOutboundSetting,
+        eventLoopGroup: EventLoopGroup
+    ) {
+        val promise = eventLoopGroup.next().newPromise<Channel>()
+        promise.addListener(connectListener)
+        val sslCtx: SslContext =
+            SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+        connect(
+            eventLoopGroup, {
+                mutableListOf(
+                    HandlerPair(SslActiveHandler(promise)),
+                    HandlerPair(sslCtx.newHandler(it.alloc(), tcpOutboundSetting.host, tcpOutboundSetting.port))
+
+                )
+            }, InetSocketAddress(tcpOutboundSetting.host, tcpOutboundSetting.port)
+        )
+    }
+
+    private fun tcpStream(
+        connectListener: FutureListener<Channel>,
+        tcpOutboundSetting: TcpOutboundSetting,
+        eventLoopGroup: EventLoopGroup
+    ) {
+        val promise = eventLoopGroup.next().newPromise<Channel>()
+        promise.addListener(connectListener)
+
+        connect(
+            eventLoopGroup, {
+                mutableListOf(
+                    HandlerPair(ChannelActiveHandler(promise))
+                )
+            }, InetSocketAddress(tcpOutboundSetting.host, tcpOutboundSetting.port)
+        )
+    }
+
     private fun wssStream(
         connectListener: FutureListener<Channel>,
         wsOutboundSetting: WsOutboundSetting,
-        eventLoopGroup: EventLoopGroup,
-        socketAddress: InetSocketAddress
+        eventLoopGroup: EventLoopGroup
     ) {
         val promise = eventLoopGroup.next().newPromise<Channel>()
         promise.addListener(connectListener)
@@ -144,26 +186,13 @@ object Surfer {
                 uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
             ), promise
         )
-
-        connect(eventLoopGroup, object : ChannelInitializer<Channel>() {
-            override fun initChannel(ch: Channel) {
-                ch.pipeline().addLast(
-                    sslCtx.newHandler(ch.alloc(), wsOutboundSetting.host, wsOutboundSetting.port),
-                    HttpClientCodec(),
-                    HttpObjectAggregator(8192),
-                    WebSocketClientCompressionHandler.INSTANCE,
-                    webSocketClientHandler
-                )
-            }
-
-        }, InetSocketAddress(uri.host, uri.port))
         connect(eventLoopGroup, {
             mutableListOf(
-                sslCtx.newHandler(it.alloc(), wsOutboundSetting.host, wsOutboundSetting.port),
-                HttpClientCodec(),
-                HttpObjectAggregator(8192),
-                WebSocketClientCompressionHandler.INSTANCE,
-                webSocketClientHandler
+                HandlerPair(sslCtx.newHandler(it.alloc(), wsOutboundSetting.host, wsOutboundSetting.port)),
+                HandlerPair(HttpClientCodec()),
+                HandlerPair(HttpObjectAggregator(8192)),
+                HandlerPair(WebSocketClientCompressionHandler.INSTANCE),
+                HandlerPair(webSocketClientHandler)
             )
         }, InetSocketAddress(uri.host, uri.port))
     }
@@ -171,17 +200,19 @@ object Surfer {
     private fun wsStream(
         connectListener: FutureListener<Channel>,
         wsOutboundSetting: WsOutboundSetting,
-        eventLoopGroup: EventLoopGroup,
-        socketAddress: InetSocketAddress
+        eventLoopGroup: EventLoopGroup
     ) {
         val promise = eventLoopGroup.next().newPromise<Channel>()
         promise.addListener(connectListener)
 
         val uri =
-            URI("ws://${wsOutboundSetting.host}:${if (wsOutboundSetting.port != null) wsOutboundSetting.port else 80}/${wsOutboundSetting.path}")
-        // Connect with V13 (RFC 6455 aka HyBi-17). You can change it to V08 or V00.
-        // If you change it to V00, ping is not supported and remember to change
-        // HttpResponseDecoder to WebSocketHttpResponseDecoder in the pipeline.
+            URI(
+                "ws://${wsOutboundSetting.host}:${if (wsOutboundSetting.port != null) wsOutboundSetting.port else 80}/${
+                    wsOutboundSetting.path.removePrefix(
+                        "/"
+                    )
+                }"
+            )
         val webSocketClientHandler = WebSocketClientHandler(
             WebSocketClientHandshakerFactory.newHandshaker(
                 uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
@@ -189,10 +220,10 @@ object Surfer {
         )
         connect(eventLoopGroup, {
             mutableListOf(
-                HttpClientCodec(),
-                HttpObjectAggregator(8192),
-                WebSocketClientCompressionHandler.INSTANCE,
-                webSocketClientHandler
+                HandlerPair(HttpClientCodec()),
+                HandlerPair(HttpObjectAggregator(8192)),
+                HandlerPair(WebSocketClientCompressionHandler.INSTANCE),
+                HandlerPair(webSocketClientHandler)
             )
         }, InetSocketAddress(uri.host, uri.port))
 
@@ -203,7 +234,12 @@ object Surfer {
     private fun galaxy(
         connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress, eventLoopGroup: EventLoopGroup
     ) {
-        connect(eventLoopGroup, connectListener, null, socketAddress)
+        val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
+        connect(eventLoopGroup, {
+            mutableListOf(
+                HandlerPair(ChannelActiveHandler(promise))
+            )
+        }, socketAddress)
     }
 
     private fun httpStream(
@@ -212,6 +248,7 @@ object Surfer {
         eventLoopGroup: EventLoopGroup,
         socketAddress: InetSocketAddress
     ) {
+        val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
         val proxyHandler = if (httpOutboundSetting.auth == null) {
             HttpProxyHandler(
                 InetSocketAddress(
@@ -225,7 +262,12 @@ object Surfer {
                 httpOutboundSetting.auth.password
             )
         }
-        connect(eventLoopGroup, connectListener, proxyHandler, socketAddress)
+        connect(eventLoopGroup, {
+            mutableListOf(
+                HandlerPair(proxyHandler, PROXY_HANDLER_NAME),
+                HandlerPair(ChannelActiveHandler(promise))
+            )
+        }, socketAddress)
     }
 
     private fun socks5Stream(
@@ -234,6 +276,7 @@ object Surfer {
         eventLoopGroup: EventLoopGroup,
         socketAddress: InetSocketAddress
     ) {
+        val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
         val proxyHandler = if (socks5OutboundSetting.auth == null) {
             Socks5ProxyHandler(
                 InetSocketAddress(
@@ -247,18 +290,27 @@ object Surfer {
                 socks5OutboundSetting.auth.password
             )
         }
-        connect(eventLoopGroup, connectListener, proxyHandler, socketAddress)
+        connect(eventLoopGroup, {
+            mutableListOf(
+                HandlerPair(proxyHandler, PROXY_HANDLER_NAME),
+                HandlerPair(ChannelActiveHandler(promise))
+            )
+        }, socketAddress)
     }
 
     private fun connect(
         eventLoopGroup: EventLoopGroup,
-        handlerInitializer: (Channel) -> MutableList<ChannelHandler>,
+        handlerInitializer: (Channel) -> MutableList<HandlerPair>,
         inetSocketAddress: InetSocketAddress
     ) {
         connect(eventLoopGroup, object : ChannelInitializer<Channel>() {
             override fun initChannel(ch: Channel) {
                 handlerInitializer(ch).forEach {
-                    ch.pipeline().addLast(it)
+                    if (it.name != null) {
+                        ch.pipeline().addLast(it.name, it.handler)
+                    } else {
+                        ch.pipeline().addLast(it.handler)
+                    }
                 }
             }
         }, inetSocketAddress)
@@ -275,30 +327,11 @@ object Surfer {
             .handler(channelInitializer)
             .connect(socketAddress)
     }
-
-    private fun connect(
-        eventLoopGroup: EventLoopGroup,
-        connectListener: FutureListener<Channel>,
-        proxyHandler: ProxyHandler?,
-        socketAddress: InetSocketAddress
-    ) {
-        val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
-        Bootstrap().group(eventLoopGroup).channel(NioSocketChannel::class.java)
-            .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
-            .handler(object : ChannelInitializer<Channel>() {
-                override fun initChannel(ch: Channel) {
-                    if (proxyHandler != null) {
-                        ch.pipeline().addLast(
-                            PROXY_HANDLER_NAME, proxyHandler
-                        )
-                    }
-                    ch.pipeline().addLast(ChannelActiveHandler(promise))
-                }
-
-            }).connect(socketAddress)
-    }
 }
 
+/**
+ * basic activator for client connected, some protocol not have complex handshake process, so we can use this activator to active other operation
+ */
 class ChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHandler() {
     private val logger = KotlinLogging.logger {}
     override fun channelActive(ctx: ChannelHandlerContext) {
@@ -312,20 +345,19 @@ class ChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuple
         }
         ctx.fireUserEventTriggered(evt)
     }
+}
 
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        logger.trace(
-            "[{}], galaxy read {}, pipelines: {}",
-            ctx.channel().id().asShortText(),
-            msg,
-            ctx.channel().pipeline().names()
-        )
-        super.channelRead(ctx, msg)
-    }
-
-    @Suppress("OVERRIDE_DEPRECATION")
-    override fun exceptionCaught(ctx: ChannelHandlerContext?, cause: Throwable?) {
-        logger.error(cause) { "proxy exceptionCaught" }
+/**
+ * ssl activator for client connected, when ssl handshake complete, we can active other operation
+ */
+class SslActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHandler() {
+    private val logger = KotlinLogging.logger {}
+    override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
+        if (evt is SslCompletionEvent) {
+            logger.trace { "SslCompletionEvent: $evt" }
+            promise.setSuccess(ctx.channel())
+        }
+        ctx.fireUserEventTriggered(evt)
     }
 }
 
@@ -350,7 +382,7 @@ class WebSocketClientHandler(
                 logger.trace("[${ctx.channel().id().asShortText()}] WebSocket Client connected!")
                 connectPromise.setSuccess(ctx.channel())
             } catch (e: WebSocketHandshakeException) {
-                logger.debug("WebSocket Client failed to connect")
+                logger.error(e) { "WebSocket Client failed to connect" }
                 connectPromise.setFailure(e)
             }
             return
@@ -483,3 +515,8 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
         ctx.close()
     }
 }
+
+data class HandlerPair(val handler: ChannelHandler, val name: String?) {
+    constructor(handler: ChannelHandler) : this(handler, null)
+}
+
