@@ -1,18 +1,17 @@
 package stream
 
 
-import inbounds.Websocket
 import io.netty.bootstrap.Bootstrap
-import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.DefaultHttpHeaders
-import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.HttpClientCodec
 import io.netty.handler.codec.http.HttpObjectAggregator
-import io.netty.handler.codec.http.websocketx.*
+import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory
+import io.netty.handler.codec.http.websocketx.WebSocketClientProtocolHandler
+import io.netty.handler.codec.http.websocketx.WebSocketVersion
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
 import io.netty.handler.logging.ByteBufFormat
 import io.netty.handler.logging.LogLevel
@@ -24,7 +23,6 @@ import io.netty.handler.ssl.SslCompletionEvent
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
-import io.netty.util.CharsetUtil
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
@@ -166,33 +164,25 @@ object Surfer {
         promise.addListener(connectListener)
 
         val uri =
-            URI(
-                "wss://${wsOutboundSetting.host}:${if (wsOutboundSetting.port != null) wsOutboundSetting.port else 443}/${
-                    wsOutboundSetting.path.removePrefix(
-                        "/"
-                    )
-                }"
-            )
+            URI("wss://${wsOutboundSetting.host}:${wsOutboundSetting.port}/${wsOutboundSetting.path.removePrefix("/")}")
 
         val sslCtx: SslContext =
             SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
 
-
-        // Connect with V13 (RFC 6455 aka HyBi-17). You can change it to V08 or V00.
-        // If you change it to V00, ping is not supported and remember to change
-        // HttpResponseDecoder to WebSocketHttpResponseDecoder in the pipeline.
-        val webSocketClientHandler = WebSocketClientHandler(
-            WebSocketClientHandshakerFactory.newHandshaker(
-                uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-            ), promise
-        )
         connect(eventLoopGroup, {
             mutableListOf(
                 HandlerPair(sslCtx.newHandler(it.alloc(), wsOutboundSetting.host, wsOutboundSetting.port)),
                 HandlerPair(HttpClientCodec()),
                 HandlerPair(HttpObjectAggregator(8192)),
                 HandlerPair(WebSocketClientCompressionHandler.INSTANCE),
-                HandlerPair(webSocketClientHandler)
+                HandlerPair(
+                    WebSocketClientProtocolHandler(
+                        WebSocketClientHandshakerFactory.newHandshaker(
+                            uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
+                        )
+                    )
+                ),
+                HandlerPair(WebsocketDuplexHandler(promise))
             )
         }, InetSocketAddress(uri.host, uri.port))
     }
@@ -206,27 +196,22 @@ object Surfer {
         promise.addListener(connectListener)
 
         val uri =
-            URI(
-                "ws://${wsOutboundSetting.host}:${if (wsOutboundSetting.port != null) wsOutboundSetting.port else 80}/${
-                    wsOutboundSetting.path.removePrefix(
-                        "/"
-                    )
-                }"
-            )
-        val webSocketClientHandler = WebSocketClientHandler(
-            WebSocketClientHandshakerFactory.newHandshaker(
-                uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-            ), promise
-        )
+            URI("ws://${wsOutboundSetting.host}:${wsOutboundSetting.port}/${wsOutboundSetting.path.removePrefix("/")}")
         connect(eventLoopGroup, {
             mutableListOf(
                 HandlerPair(HttpClientCodec()),
                 HandlerPair(HttpObjectAggregator(8192)),
                 HandlerPair(WebSocketClientCompressionHandler.INSTANCE),
-                HandlerPair(webSocketClientHandler)
+                HandlerPair(
+                    WebSocketClientProtocolHandler(
+                        WebSocketClientHandshakerFactory.newHandshaker(
+                            uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
+                        )
+                    )
+                ),
+                HandlerPair(WebsocketDuplexHandler(promise))
             )
         }, InetSocketAddress(uri.host, uri.port))
-
 
     }
 
@@ -361,95 +346,6 @@ class SslActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHan
     }
 }
 
-
-class WebSocketClientHandler(
-    private val handshaker: WebSocketClientHandshaker, private val connectPromise: Promise<Channel>
-) : ChannelDuplexHandler() {
-
-    companion object {
-        private val logger = KotlinLogging.logger {}
-    }
-
-    override fun channelActive(ctx: ChannelHandlerContext) {
-        handshaker.handshake(ctx.channel())
-    }
-
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        val ch = ctx.channel()
-        if (!handshaker.isHandshakeComplete) {
-            try {
-                handshaker.finishHandshake(ch, msg as FullHttpResponse?)
-                logger.trace("[${ctx.channel().id().asShortText()}] WebSocket Client connected!")
-                connectPromise.setSuccess(ctx.channel())
-            } catch (e: WebSocketHandshakeException) {
-                logger.error(e) { "WebSocket Client failed to connect" }
-                connectPromise.setFailure(e)
-            }
-            return
-        }
-        when (msg) {
-            is FullHttpResponse -> {
-                ReferenceCountUtil.release(msg)
-                error(
-                    "Unexpected FullHttpResponse (getStatus=${msg.status()}, content=${
-                        msg.content().toString(CharsetUtil.UTF_8)
-                    })"
-                )
-            }
-
-            is TextWebSocketFrame -> {
-                logger.trace(
-                    "[${
-                        ctx.channel().id().asShortText()
-                    }], WebSocket Client received message: " + msg.text()
-                )
-                ctx.fireChannelRead(msg)
-            }
-
-            is PongWebSocketFrame -> {
-                logger.debug("[${ctx.channel().id().asShortText()}], WebSocket Client received pong")
-            }
-
-            is CloseWebSocketFrame -> {
-                logger.debug("[${ctx.channel().id().asShortText()}], WebSocket Client received closing")
-                ch.close()
-            }
-
-            is BinaryWebSocketFrame -> {
-                logger.trace(
-                    "[${
-                        ctx.channel().id().asShortText()
-                    }], WebSocket Client receive message:{}, pipeline handlers:{}",
-                    msg.javaClass.name,
-                    ctx.pipeline().names()
-                )
-                //copy the content to avoid release this handler
-                ctx.fireChannelRead(ReferenceCountUtil.releaseLater(msg.content().copy()))
-            }
-
-            is ByteBuf -> {
-                logger.warn(
-                    "[${
-                        ctx.channel().id().asShortText()
-                    }], WebSocket Client receive message:{}, pipeline handlers:{}",
-                    msg.javaClass.name,
-                    ctx.pipeline().names()
-                )
-                ctx.fireChannelRead(ReferenceCountUtil.releaseLater(msg.copy()))
-
-            }
-        }
-    }
-
-    override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
-        logger.trace(
-            "[${
-                ctx.channel().id().asShortText()
-            }], WebSocket Client send message:{}, pipeline handlers:{}", msg.javaClass.name, ctx.pipeline().names()
-        )
-        Websocket.websocketWrite(ctx, msg, promise)
-    }
-}
 
 /**
  * relay from client channel to server

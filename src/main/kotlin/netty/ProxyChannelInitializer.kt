@@ -3,7 +3,7 @@ package netty
 
 import inbounds.HttpProxyServerHandler
 import inbounds.SocksServerHandler
-import inbounds.WebsocketDuplexHandler
+import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.channel.ChannelInitializer
@@ -16,10 +16,13 @@ import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
 import io.netty.handler.stream.ChunkedWriteHandler
 import io.netty.handler.timeout.IdleStateEvent
 import io.netty.handler.timeout.IdleStateHandler
+import io.netty.util.concurrent.FutureListener
+import io.netty.util.concurrent.Promise
 import model.config.ConfigurationSettings.Companion.Configuration
 import model.config.Inbound
 import mu.KotlinLogging
 import protocol.TrojanInboundHandler
+import stream.WebsocketDuplexHandler
 import java.util.function.Function
 import java.util.stream.Collectors
 
@@ -79,17 +82,31 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
     private fun initTrojanInbound(ch: NioSocketChannel, inbound: Inbound) {
         when (inbound.inboundStreamBy!!.type) {
             "ws" -> {
-                val handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit = { ctx, _ ->
-                    ctx.pipeline().addLast(TrojanInboundHandler(inbound))
-                }
-                initWebsocketInbound(ch, inbound.inboundStreamBy.wsInboundSetting.path, handshakeCompleteCallBack)
+                val handleShakePromise = ch.eventLoop().next().newPromise<Channel>()
+                handleShakePromise.addListener (FutureListener { future ->
+                    if (future.isSuccess) {
+                        future.get().pipeline().addLast(TrojanInboundHandler(inbound))
+                    }
+                })
+
+                initWebsocketInbound(ch, inbound.inboundStreamBy.wsInboundSetting.path, handleShakePromise)
             }
         }
 
     }
 
-    private fun initWebsocketInbound(ch: NioSocketChannel, path: String, handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit) {
-        ch.pipeline().addLast(ChunkedWriteHandler(), HttpServerCodec(), HttpObjectAggregator(Int.MAX_VALUE), WebSocketServerProtocolHandler(path), WebsocketDuplexHandler(handshakeCompleteCallBack))
+    private fun initWebsocketInbound(
+        ch: NioSocketChannel,
+        path: String,
+        handleShakePromise: Promise<Channel>
+    ) {
+        ch.pipeline().addLast(
+            ChunkedWriteHandler(),
+            HttpServerCodec(),
+            HttpObjectAggregator(Int.MAX_VALUE),
+            WebSocketServerProtocolHandler(path),
+            WebsocketDuplexHandler(handleShakePromise)
+        )
     }
 }
 

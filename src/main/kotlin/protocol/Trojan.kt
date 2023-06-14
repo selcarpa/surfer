@@ -34,7 +34,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
             TrojanPackage.parse(msg)
         } catch (e: DecoderException) {
             logger.warn { "parse trojan package failed, ${e.message}" }
-            ReferenceCountUtil.release(msg)
+//            ReferenceCountUtil.release(msg)
             return
         }
 

@@ -1,8 +1,8 @@
-package inbounds
+package stream
 
 
-import inbounds.Websocket.websocketWrite
 import io.netty.buffer.ByteBuf
+import io.netty.channel.Channel
 import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
@@ -10,9 +10,10 @@ import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.websocketx.*
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
+import io.netty.util.concurrent.Promise
 import mu.KotlinLogging
 
-class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: ChannelHandlerContext, evt: WebSocketServerProtocolHandler.HandshakeComplete) -> Unit) :
+class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>) :
     ChannelDuplexHandler() {
     companion object {
         private val logger = KotlinLogging.logger {}
@@ -22,7 +23,14 @@ class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: Channe
 
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
         if (evt is WebSocketServerProtocolHandler.HandshakeComplete) {
-            handshakeCompleteCallBack(ctx, evt)
+            handleShakePromise.setSuccess(ctx.channel())
+        }
+        if (evt is WebSocketClientProtocolHandler.ClientHandshakeStateEvent) {
+            if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE) {
+                handleShakePromise.setSuccess(ctx.channel())
+            }else if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_TIMEOUT){
+                handleShakePromise.setFailure(Throwable("websocket handshake failed"))
+            }
         }
         super.userEventTriggered(ctx, evt)
     }
@@ -68,11 +76,12 @@ class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: Channe
             }
 
             is ContinuationWebSocketFrame -> {
+                logger.debug { "WebsocketInbound receive ContinuationWebSocketFrame:${msg.javaClass.name}" }
                 if (msg.isFinalFragment) {
                     if (continuationBuffer != null) {
                         continuationBuffer!!.writeBytes(msg.content())
-                        ctx.fireChannelRead(ReferenceCountUtil.releaseLater(continuationBuffer!!.copy()))
-                        ReferenceCountUtil.release(continuationBuffer)
+                        ReferenceCountUtil.release(msg)
+                        ctx.fireChannelRead(continuationBuffer)
                         continuationBuffer = null
                     } else {
                         ctx.fireChannelRead(msg.content())
@@ -95,15 +104,6 @@ class WebsocketDuplexHandler(private val handshakeCompleteCallBack: (ctx: Channe
     }
 
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
-        websocketWrite(ctx, msg, promise)
-    }
-
-
-}
-
-object Websocket {
-    private val logger = KotlinLogging.logger {}
-    fun websocketWrite(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         when (msg) {
             is ByteBuf -> {
                 //todo: fix leak
@@ -121,7 +121,6 @@ object Websocket {
                     }
                 }
             }
-
             else -> {
                 ctx.write(msg, promise)
             }

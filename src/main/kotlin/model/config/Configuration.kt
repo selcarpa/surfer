@@ -44,6 +44,6 @@ data class InboundStreamBy(val type: String, val wsInboundSetting: WsInboundSett
 data class WsOutboundSetting(val path: String, val port: Int, val host: String)
 data class WsInboundSetting(val path: String)
 data class TrojanSetting(val password: String) : ProxyProtocolSetting()
-data class LogConfiguration(var level: String = "info", var pattern: String = "%date{ISO8601} %highlight(%level) [%t] %cyan(%logger{16}) %M: %msg%n", var maxHistory: Int = 7, var fileName: String = "", var path: String? = "./logs/")
+data class LogConfiguration(var level: String = "info", var pattern: String = "%date{ISO8601} %highlight(%level) [%t] %cyan(%logger{16}) %M: %msg%n", var maxHistory: Int = 7, var fileName: String = "", var path: String = "./logs/")
 
 open class ProxyProtocolSetting()
