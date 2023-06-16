@@ -37,51 +37,83 @@ java -jar surfer.jar -c=config.json
     path: "/var/log/surfer"
   },
   inbounds: [
-    {
-      port: 14270,
-      protocol: "socks5",
-      socks5Setting: {
-        //optional 
-        auth: {
-          password: "1",
-          username: "1"
-        }
-      }
-    },
-    {
-      port: 14271,
-      protocol: "http"
-    },
-    {
-      protocol: "trojan",
-      port: 14272,
-      inboundStreamBy: {
-        type: "ws",
-        wsInboundSettings: {
-          path: "/exam"
-        }
-      }
-    }
+    //Inbound (refer: inbound section)
   ],
   outbounds: [
-    {
-      protocol: "galaxy"
-    },
-    {
-      protocol: "trojan",
-      outboundStreamBy: {
-        type: "wss",
-        wsOutboundSetting: {
-          port: 443,
-          host: "a.exampl.com",
-          path: "/exam"
-        }
-      },
-      trojanSetting: {
-        password: "any password"
-      }
+    //Outbound
+  ],
+  rules: [
+    //Rule
+  ]
+}
+```
+
+#### Inbound
+
+##### http inbound
+
+```json5
+{
+  //listen port
+  port: 14270,
+  //protocol
+  protocol: "http"
+}
+```
+
+##### socks inbound
+
+```json5
+{
+  port: 14270,
+  protocol: "socks5",
+  socks5Setting: {//optional
+    auth: {//optional, if not set, no authentication
+      username: "username",
+      password: "password"
+    }
+  }
+}
+```
+
+##### trojan inbound
+
+```json5
+  {
+  "protocol": "trojan",
+  "port": 14270,
+  "inboundStreamBy": {//when inbound protocol is trojan, this field is required
+    "type": "ws",//ws is only supported now
+    "wsInboundSetting": {//when inboundStreamBy.type is ws, this field is required 
+      "path": "/path"//ws path, must set
+    }
+  },
+  "trojanSettings": [//when inbound protocol is trojan, this field is required
+    {//1 item at least
+      "password": "password"//password, must set
     }
   ]
 }
+```
 
+#### Outbound
+
+##### direct outbound
+
+```json5
+{
+  protocol: "galaxy",
+  outboundStreamBy: {
+    //optional
+    type: "http",//http and socks5 are supported now
+    httpOutboundSetting: {//when outboundStreamBy.type is http, this field is required
+      host: "127.0.0.1",
+      port: 8080
+    },
+    sock5OutboundSetting: {//when outboundStreamBy.type is socks5, this field is required
+      host: "127.0.0.1",
+      port: 8080
+    }
+  }
+}
 ```

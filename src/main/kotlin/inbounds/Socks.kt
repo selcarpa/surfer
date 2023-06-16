@@ -11,9 +11,9 @@ import io.netty.handler.codec.socksx.v5.*
 import model.config.Inbound
 import model.protocol.ConnectTo
 import mu.KotlinLogging
-import protocol.TrojanRelayInboundHandler
 import route.Route
-import stream.Surfer
+import stream.RelayAndOutboundOp
+import stream.relayAndOutbound
 import utils.ChannelUtils
 
 @Sharable
@@ -140,40 +140,80 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
         )
         resolveOutbound.ifPresent { outbound ->
             val connectTo = ConnectTo(message.dstAddr(), message.dstPort())
-            when (outbound.protocol) {
-                "galaxy" -> {
-                    Surfer.relayAndOutbound(originCTX = originCTX, outbound = outbound, connectEstablishedCallback = {
+            relayAndOutbound(
+                RelayAndOutboundOp(
+                    originCTX = originCTX,
+                    outbound = outbound,
+                    connectTo = connectTo
+                ).also {relayAndOutboundOp ->
+                    relayAndOutboundOp.connectEstablishedCallback = {
                         originCTX.channel().writeAndFlush(
                             DefaultSocks5CommandResponse(
-                                Socks5CommandStatus.SUCCESS, message.dstAddrType(), message.dstAddr(), message.dstPort()
+                                Socks5CommandStatus.SUCCESS,
+                                message.dstAddrType(),
+                                message.dstAddr(),
+                                message.dstPort()
                             )
                         ).addListener(ChannelFutureListener {
                             originCTX.pipeline().remove(this@SocksServerConnectHandler)
                         })
-                    }, connectFail = {
+                    }
+                    relayAndOutboundOp.connectFail = {
                         originCTX.close()
-                    }, connectTo = connectTo)
+                    }
+                }
+            )
+           /* when (outbound.protocol) {
+                "galaxy" -> {
+                    Surfer.relayAndOutbound(
+                        originCTX = originCTX,
+                        outbound = outbound,
+                        connectEstablishedCallback = {
+                            originCTX.channel().writeAndFlush(
+                                DefaultSocks5CommandResponse(
+                                    Socks5CommandStatus.SUCCESS,
+                                    message.dstAddrType(),
+                                    message.dstAddr(),
+                                    message.dstPort()
+                                )
+                            ).addListener(ChannelFutureListener {
+                                originCTX.pipeline().remove(this@SocksServerConnectHandler)
+                            })
+                        },
+                        connectFail = {
+                            originCTX.close()
+                        },
+                        connectTo = connectTo
+                    )
 
                 }
 
                 "trojan" -> {
-                    Surfer.relayAndOutbound(originCTX, {
-                        TrojanRelayInboundHandler(
-                            it, outbound, connectTo, firstPackage = true
-                        )
-                    }, outbound, {
-                        originCTX.channel().writeAndFlush(
-                            DefaultSocks5CommandResponse(
-                                Socks5CommandStatus.SUCCESS, message.dstAddrType(), message.dstAddr(), message.dstPort()
+                    Surfer.relayAndOutbound(
+                        originCTX = originCTX,
+                        originCTXRelayHandler = {
+                            TrojanRelayInboundHandler(
+                                it, outbound, connectTo, firstPackage = true
                             )
-                        ).addListener(ChannelFutureListener {
-                            originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                        })
-                    }, {
-                        //ignored
-                    }, {
-                        originCTX.close()
-                    }, connectTo)
+                        },
+                        outbound = outbound,
+                        connectEstablishedCallback = {
+                            originCTX.channel().writeAndFlush(
+                                DefaultSocks5CommandResponse(
+                                    Socks5CommandStatus.SUCCESS,
+                                    message.dstAddrType(),
+                                    message.dstAddr(),
+                                    message.dstPort()
+                                )
+                            ).addListener(ChannelFutureListener {
+                                originCTX.pipeline().remove(this@SocksServerConnectHandler)
+                            })
+                        },
+                        connectFail = {
+                            originCTX.close()
+                        },
+                        connectTo = connectTo
+                    )
 
                 }
 
@@ -184,7 +224,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                         }, protocol=${outbound.protocol} not support"
                     )
                 }
-            }
+            }*/
         }
 
     }

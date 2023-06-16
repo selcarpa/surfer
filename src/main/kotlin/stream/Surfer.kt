@@ -32,286 +32,333 @@ import model.config.*
 import model.protocol.ConnectTo
 import mu.KotlinLogging
 import protocol.DiscardHandler
+import protocol.TrojanRelayInboundHandler
 import utils.ChannelUtils
 import java.net.InetSocketAddress
 import java.net.URI
 
+private val logger = KotlinLogging.logger {}
 
-object Surfer {
+/**
+ * Handle all incoming messages, and relay them to the outbound
+ */
+fun union(){
+    //todo
+}
 
-    private val logger = KotlinLogging.logger {}
-
-    fun relayAndOutbound(
-        originCTX: ChannelHandlerContext,
-        originCTXRelayHandler: (Channel) -> RelayInboundHandler = { RelayInboundHandler(it) },
-        outbound: Outbound,
-        connectEstablishedCallback: (Channel) -> ChannelFuture,
-        afterAddRelayHandler: (Channel) -> Unit = {},
-        connectFail: () -> Unit = {},
-        connectTo: ConnectTo
-    ) {
-
-        val connectListener = FutureListener<Channel> { future ->
-            val outboundChannel = future.now
-            if (future.isSuccess) {
-                logger.trace { "outboundChannel: $outboundChannel" }
-                connectEstablishedCallback(outboundChannel).addListener(FutureListener {
-                    if (it.isSuccess) {
-                        outboundChannel.pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(originCTX.channel()))
-                        originCTX.pipeline().addLast(RELAY_HANDLER_NAME, originCTXRelayHandler(outboundChannel))
-                        afterAddRelayHandler(outboundChannel)
-                    } else {
-                        logger.error(it.cause()) { "connectEstablishedCallback fail: ${it.cause().message}" }
-                    }
-                })
-            } else {
-                connectFail()
+/**
+ * Commonly used relay and outbound methods
+ * @param relayAndOutboundOp [RelayAndOutboundOp]
+ */
+fun relayAndOutbound(relayAndOutboundOp: RelayAndOutboundOp) {
+    if (!relayAndOutboundOp.overrideRelayHandler) {
+        when (relayAndOutboundOp.outbound.protocol) {
+            "galaxy" -> {
+                //ignored
             }
-        }
-        outbound(
-            outbound = outbound,
-            connectListener = connectListener,
-            eventLoopGroup = originCTX.channel().eventLoop(),
-            socketAddress = connectTo.socketAddress()
 
-        )
-    }
-
-    private fun outbound(
-        outbound: Outbound,
-        connectListener: FutureListener<Channel>,
-        socketAddress: InetSocketAddress,
-        eventLoopGroup: EventLoopGroup = NioEventLoopGroup()
-    ) {
-        if (outbound.outboundStreamBy == null) {
-            return galaxy(connectListener, socketAddress, eventLoopGroup)
-        }
-        return when (outbound.outboundStreamBy.type) {
-            "wss" -> wssStream(
-                connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup
-            )
-
-            "ws" -> wsStream(
-                connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup
-            )
-
-            "socks5" -> socks5Stream(
-                connectListener, outbound.outboundStreamBy.sock5OutboundSetting!!, eventLoopGroup, socketAddress
-            )
-
-            "http" -> httpStream(
-                connectListener, outbound.outboundStreamBy.httpOutboundSetting!!, eventLoopGroup, socketAddress
-            )
-
-            "tcp" -> tcpStream(
-                connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup
-            )
-
-            "tls" -> tlsStream(
-                connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup
-            )
-
-
-            else -> {
-                logger.error { "stream type ${outbound.outboundStreamBy.type} not supported" }
-            }
-        }
-    }
-
-    private fun tlsStream(
-        connectListener: FutureListener<Channel>,
-        tcpOutboundSetting: TcpOutboundSetting,
-        eventLoopGroup: EventLoopGroup
-    ) {
-        val promise = eventLoopGroup.next().newPromise<Channel>()
-        promise.addListener(connectListener)
-        val sslCtx: SslContext =
-            SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
-        connect(
-            eventLoopGroup, {
-                mutableListOf(
-                    HandlerPair(SslActiveHandler(promise)),
-                    HandlerPair(sslCtx.newHandler(it.alloc(), tcpOutboundSetting.host, tcpOutboundSetting.port))
-
-                )
-            }, InetSocketAddress(tcpOutboundSetting.host, tcpOutboundSetting.port)
-        )
-    }
-
-    private fun tcpStream(
-        connectListener: FutureListener<Channel>,
-        tcpOutboundSetting: TcpOutboundSetting,
-        eventLoopGroup: EventLoopGroup
-    ) {
-        val promise = eventLoopGroup.next().newPromise<Channel>()
-        promise.addListener(connectListener)
-
-        connect(
-            eventLoopGroup, {
-                mutableListOf(
-                    HandlerPair(ChannelActiveHandler(promise))
-                )
-            }, InetSocketAddress(tcpOutboundSetting.host, tcpOutboundSetting.port)
-        )
-    }
-
-    private fun wssStream(
-        connectListener: FutureListener<Channel>,
-        wsOutboundSetting: WsOutboundSetting,
-        eventLoopGroup: EventLoopGroup
-    ) {
-        val promise = eventLoopGroup.next().newPromise<Channel>()
-        promise.addListener(connectListener)
-
-        val uri =
-            URI("wss://${wsOutboundSetting.host}:${wsOutboundSetting.port}/${wsOutboundSetting.path.removePrefix("/")}")
-
-        val sslCtx: SslContext =
-            SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
-
-        connect(eventLoopGroup, {
-            mutableListOf(
-                HandlerPair(sslCtx.newHandler(it.alloc(), wsOutboundSetting.host, wsOutboundSetting.port)),
-                HandlerPair(HttpClientCodec()),
-                HandlerPair(HttpObjectAggregator(8192)),
-                HandlerPair(WebSocketClientCompressionHandler.INSTANCE),
-                HandlerPair(
-                    WebSocketClientProtocolHandler(
-                        WebSocketClientHandshakerFactory.newHandshaker(
-                            uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-                        )
+            "trojan" -> {
+                relayAndOutboundOp.originCTXRelayHandler = {
+                    TrojanRelayInboundHandler(
+                        it,
+                        relayAndOutboundOp.outbound,
+                        relayAndOutboundOp.connectTo,
+                        firstPackage = true
                     )
-                ),
-                HandlerPair(WebsocketDuplexHandler(promise))
-            )
-        }, InetSocketAddress(uri.host, uri.port))
-    }
-
-    private fun wsStream(
-        connectListener: FutureListener<Channel>,
-        wsOutboundSetting: WsOutboundSetting,
-        eventLoopGroup: EventLoopGroup
-    ) {
-        val promise = eventLoopGroup.next().newPromise<Channel>()
-        promise.addListener(connectListener)
-
-        val uri =
-            URI("ws://${wsOutboundSetting.host}:${wsOutboundSetting.port}/${wsOutboundSetting.path.removePrefix("/")}")
-        connect(eventLoopGroup, {
-            mutableListOf(
-                HandlerPair(HttpClientCodec()),
-                HandlerPair(HttpObjectAggregator(8192)),
-                HandlerPair(WebSocketClientCompressionHandler.INSTANCE),
-                HandlerPair(
-                    WebSocketClientProtocolHandler(
-                        WebSocketClientHandshakerFactory.newHandshaker(
-                            uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-                        )
-                    )
-                ),
-                HandlerPair(WebsocketDuplexHandler(promise))
-            )
-        }, InetSocketAddress(uri.host, uri.port))
-
-    }
-
-
-    private fun galaxy(
-        connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress, eventLoopGroup: EventLoopGroup
-    ) {
-        val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
-        connect(eventLoopGroup, {
-            mutableListOf(
-                HandlerPair(ChannelActiveHandler(promise))
-            )
-        }, socketAddress)
-    }
-
-    private fun httpStream(
-        connectListener: FutureListener<Channel>,
-        httpOutboundSetting: HttpOutboundSetting,
-        eventLoopGroup: EventLoopGroup,
-        socketAddress: InetSocketAddress
-    ) {
-        val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
-        val proxyHandler = if (httpOutboundSetting.auth == null) {
-            HttpProxyHandler(
-                InetSocketAddress(
-                    httpOutboundSetting.host, httpOutboundSetting.port
-                )
-            )
-        } else {
-            HttpProxyHandler(
-                InetSocketAddress(httpOutboundSetting.host, httpOutboundSetting.port),
-                httpOutboundSetting.auth.username,
-                httpOutboundSetting.auth.password
-            )
-        }
-        connect(eventLoopGroup, {
-            mutableListOf(
-                HandlerPair(proxyHandler, PROXY_HANDLER_NAME),
-                HandlerPair(ChannelActiveHandler(promise))
-            )
-        }, socketAddress)
-    }
-
-    private fun socks5Stream(
-        connectListener: FutureListener<Channel>,
-        socks5OutboundSetting: Sock5OutboundSetting,
-        eventLoopGroup: EventLoopGroup,
-        socketAddress: InetSocketAddress
-    ) {
-        val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
-        val proxyHandler = if (socks5OutboundSetting.auth == null) {
-            Socks5ProxyHandler(
-                InetSocketAddress(
-                    socks5OutboundSetting.host, socks5OutboundSetting.port
-                )
-            )
-        } else {
-            Socks5ProxyHandler(
-                InetSocketAddress(socks5OutboundSetting.host, socks5OutboundSetting.port),
-                socks5OutboundSetting.auth.username,
-                socks5OutboundSetting.auth.password
-            )
-        }
-        connect(eventLoopGroup, {
-            mutableListOf(
-                HandlerPair(proxyHandler, PROXY_HANDLER_NAME),
-                HandlerPair(ChannelActiveHandler(promise))
-            )
-        }, socketAddress)
-    }
-
-    private fun connect(
-        eventLoopGroup: EventLoopGroup,
-        handlerInitializer: (Channel) -> MutableList<HandlerPair>,
-        inetSocketAddress: InetSocketAddress
-    ) {
-        connect(eventLoopGroup, object : ChannelInitializer<Channel>() {
-            override fun initChannel(ch: Channel) {
-                handlerInitializer(ch).forEach {
-                    if (it.name != null) {
-                        ch.pipeline().addLast(it.name, it.handler)
-                    } else {
-                        ch.pipeline().addLast(it.handler)
-                    }
                 }
             }
-        }, inetSocketAddress)
 
+            else -> {
+                logger.error { "protocol ${relayAndOutboundOp.outbound.protocol} not supported" }
+                relayAndOutboundOp.connectFail()
+            }
+        }
     }
+    relayAndOutbound(
+        originCTX = relayAndOutboundOp.originCTX,
+        originCTXRelayHandler = relayAndOutboundOp.originCTXRelayHandler,
+        outbound = relayAndOutboundOp.outbound,
+        connectEstablishedCallback = relayAndOutboundOp.connectEstablishedCallback,
+        afterAddRelayHandler = relayAndOutboundOp.afterAddRelayHandler,
+        connectFail = relayAndOutboundOp.connectFail,
+        connectTo = relayAndOutboundOp.connectTo
+    )
+}
 
-    private fun connect(
-        eventLoopGroup: EventLoopGroup,
-        channelInitializer: ChannelInitializer<Channel>,
-        socketAddress: InetSocketAddress
-    ) {
-        Bootstrap().group(eventLoopGroup).channel(NioSocketChannel::class.java)
-            .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
-            .handler(channelInitializer)
-            .connect(socketAddress)
+fun relayAndOutbound(
+    originCTX: ChannelHandlerContext,
+    originCTXRelayHandler: (Channel) -> RelayInboundHandler = { RelayInboundHandler(it) },
+    outbound: Outbound,
+    connectEstablishedCallback: (Channel) -> ChannelFuture,
+    afterAddRelayHandler: (Channel) -> Unit = {},
+    connectFail: () -> Unit = {},
+    connectTo: ConnectTo
+) {
+
+    val connectListener = FutureListener<Channel> { future ->
+        val outboundChannel = future.now
+        if (future.isSuccess) {
+            logger.trace { "outboundChannel: $outboundChannel" }
+            connectEstablishedCallback(outboundChannel).addListener(FutureListener {
+                if (it.isSuccess) {
+                    outboundChannel.pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(originCTX.channel()))
+                    originCTX.pipeline().addLast(RELAY_HANDLER_NAME, originCTXRelayHandler(outboundChannel))
+                    afterAddRelayHandler(outboundChannel)
+                } else {
+                    logger.error(it.cause()) { "connectEstablishedCallback fail: ${it.cause().message}" }
+                }
+            })
+        } else {
+            connectFail()
+        }
     }
+    outbound(
+        outbound = outbound,
+        connectListener = connectListener,
+        eventLoopGroup = originCTX.channel().eventLoop(),
+        socketAddress = connectTo.socketAddress()
+
+    )
+}
+
+/**
+ * relay and outbound
+ */
+
+private fun outbound(
+    outbound: Outbound,
+    connectListener: FutureListener<Channel>,
+    socketAddress: InetSocketAddress,
+    eventLoopGroup: EventLoopGroup = NioEventLoopGroup()
+) {
+    if (outbound.outboundStreamBy == null) {
+        return galaxy(connectListener, socketAddress, eventLoopGroup)
+    }
+    return when (outbound.outboundStreamBy.type) {
+        "wss" -> wssStream(
+            connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup
+        )
+
+        "ws" -> wsStream(
+            connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup
+        )
+
+        "socks5" -> socks5Stream(
+            connectListener, outbound.outboundStreamBy.sock5OutboundSetting!!, eventLoopGroup, socketAddress
+        )
+
+        "http" -> httpStream(
+            connectListener, outbound.outboundStreamBy.httpOutboundSetting!!, eventLoopGroup, socketAddress
+        )
+
+        "tcp" -> tcpStream(
+            connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup
+        )
+
+        "tls" -> tlsStream(
+            connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup
+        )
+
+
+        else -> {
+            logger.error { "stream type ${outbound.outboundStreamBy.type} not supported" }
+        }
+    }
+}
+
+private fun tlsStream(
+    connectListener: FutureListener<Channel>,
+    tcpOutboundSetting: TcpOutboundSetting,
+    eventLoopGroup: EventLoopGroup
+) {
+    val promise = eventLoopGroup.next().newPromise<Channel>()
+    promise.addListener(connectListener)
+    val sslCtx: SslContext =
+        SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+    connect(
+        eventLoopGroup, {
+            mutableListOf(
+                HandlerPair(SslActiveHandler(promise)),
+                HandlerPair(sslCtx.newHandler(it.alloc(), tcpOutboundSetting.host, tcpOutboundSetting.port))
+
+            )
+        }, InetSocketAddress(tcpOutboundSetting.host, tcpOutboundSetting.port)
+    )
+}
+
+private fun tcpStream(
+    connectListener: FutureListener<Channel>,
+    tcpOutboundSetting: TcpOutboundSetting,
+    eventLoopGroup: EventLoopGroup
+) {
+    val promise = eventLoopGroup.next().newPromise<Channel>()
+    promise.addListener(connectListener)
+
+    connect(
+        eventLoopGroup, {
+            mutableListOf(
+                HandlerPair(ChannelActiveHandler(promise))
+            )
+        }, InetSocketAddress(tcpOutboundSetting.host, tcpOutboundSetting.port)
+    )
+}
+
+private fun wssStream(
+    connectListener: FutureListener<Channel>,
+    wsOutboundSetting: WsOutboundSetting,
+    eventLoopGroup: EventLoopGroup
+) {
+    val promise = eventLoopGroup.next().newPromise<Channel>()
+    promise.addListener(connectListener)
+
+    val uri =
+        URI("wss://${wsOutboundSetting.host}:${wsOutboundSetting.port}/${wsOutboundSetting.path.removePrefix("/")}")
+
+    val sslCtx: SslContext =
+        SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+
+    connect(eventLoopGroup, {
+        mutableListOf(
+            HandlerPair(sslCtx.newHandler(it.alloc(), wsOutboundSetting.host, wsOutboundSetting.port)),
+            HandlerPair(HttpClientCodec()),
+            HandlerPair(HttpObjectAggregator(8192)),
+            HandlerPair(WebSocketClientCompressionHandler.INSTANCE),
+            HandlerPair(
+                WebSocketClientProtocolHandler(
+                    WebSocketClientHandshakerFactory.newHandshaker(
+                        uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
+                    )
+                )
+            ),
+            HandlerPair(WebsocketDuplexHandler(promise))
+        )
+    }, InetSocketAddress(uri.host, uri.port))
+}
+
+private fun wsStream(
+    connectListener: FutureListener<Channel>,
+    wsOutboundSetting: WsOutboundSetting,
+    eventLoopGroup: EventLoopGroup
+) {
+    val promise = eventLoopGroup.next().newPromise<Channel>()
+    promise.addListener(connectListener)
+
+    val uri =
+        URI("ws://${wsOutboundSetting.host}:${wsOutboundSetting.port}/${wsOutboundSetting.path.removePrefix("/")}")
+    connect(eventLoopGroup, {
+        mutableListOf(
+            HandlerPair(HttpClientCodec()),
+            HandlerPair(HttpObjectAggregator(8192)),
+            HandlerPair(WebSocketClientCompressionHandler.INSTANCE),
+            HandlerPair(
+                WebSocketClientProtocolHandler(
+                    WebSocketClientHandshakerFactory.newHandshaker(
+                        uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
+                    )
+                )
+            ),
+            HandlerPair(WebsocketDuplexHandler(promise))
+        )
+    }, InetSocketAddress(uri.host, uri.port))
+
+}
+
+
+private fun galaxy(
+    connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress, eventLoopGroup: EventLoopGroup
+) {
+    val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
+    connect(eventLoopGroup, {
+        mutableListOf(
+            HandlerPair(ChannelActiveHandler(promise))
+        )
+    }, socketAddress)
+}
+
+private fun httpStream(
+    connectListener: FutureListener<Channel>,
+    httpOutboundSetting: HttpOutboundSetting,
+    eventLoopGroup: EventLoopGroup,
+    socketAddress: InetSocketAddress
+) {
+    val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
+    val proxyHandler = if (httpOutboundSetting.auth == null) {
+        HttpProxyHandler(
+            InetSocketAddress(
+                httpOutboundSetting.host, httpOutboundSetting.port
+            )
+        )
+    } else {
+        HttpProxyHandler(
+            InetSocketAddress(httpOutboundSetting.host, httpOutboundSetting.port),
+            httpOutboundSetting.auth.username,
+            httpOutboundSetting.auth.password
+        )
+    }
+    connect(eventLoopGroup, {
+        mutableListOf(
+            HandlerPair(proxyHandler, PROXY_HANDLER_NAME),
+            HandlerPair(ChannelActiveHandler(promise))
+        )
+    }, socketAddress)
+}
+
+private fun socks5Stream(
+    connectListener: FutureListener<Channel>,
+    socks5OutboundSetting: Sock5OutboundSetting,
+    eventLoopGroup: EventLoopGroup,
+    socketAddress: InetSocketAddress
+) {
+    val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
+    val proxyHandler = if (socks5OutboundSetting.auth == null) {
+        Socks5ProxyHandler(
+            InetSocketAddress(
+                socks5OutboundSetting.host, socks5OutboundSetting.port
+            )
+        )
+    } else {
+        Socks5ProxyHandler(
+            InetSocketAddress(socks5OutboundSetting.host, socks5OutboundSetting.port),
+            socks5OutboundSetting.auth.username,
+            socks5OutboundSetting.auth.password
+        )
+    }
+    connect(eventLoopGroup, {
+        mutableListOf(
+            HandlerPair(proxyHandler, PROXY_HANDLER_NAME),
+            HandlerPair(ChannelActiveHandler(promise))
+        )
+    }, socketAddress)
+}
+
+private fun connect(
+    eventLoopGroup: EventLoopGroup,
+    handlerInitializer: (Channel) -> MutableList<HandlerPair>,
+    inetSocketAddress: InetSocketAddress
+) {
+    connect(eventLoopGroup, object : ChannelInitializer<Channel>() {
+        override fun initChannel(ch: Channel) {
+            handlerInitializer(ch).forEach {
+                if (it.name != null) {
+                    ch.pipeline().addLast(it.name, it.handler)
+                } else {
+                    ch.pipeline().addLast(it.handler)
+                }
+            }
+        }
+    }, inetSocketAddress)
+
+}
+
+private fun connect(
+    eventLoopGroup: EventLoopGroup,
+    channelInitializer: ChannelInitializer<Channel>,
+    socketAddress: InetSocketAddress
+) {
+    Bootstrap().group(eventLoopGroup).channel(NioSocketChannel::class.java)
+        .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+        .handler(channelInitializer)
+        .connect(socketAddress)
 }
 
 /**
@@ -415,4 +462,3 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
 data class HandlerPair(val handler: ChannelHandler, val name: String?) {
     constructor(handler: ChannelHandler) : this(handler, null)
 }
-

@@ -18,8 +18,9 @@ import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
 import route.Route
+import stream.RelayAndOutboundOp
 import stream.RelayInboundHandler
-import stream.Surfer
+import stream.relayAndOutbound
 import utils.ChannelUtils
 import utils.Sha224Utils
 
@@ -49,7 +50,26 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
             )
             Route.resolveOutbound(inbound).ifPresent { outbound ->
                 val connectTo = ConnectTo(trojanPackage.request.host, trojanPackage.request.port)
-                when (outbound.protocol) {
+                relayAndOutbound(
+                    RelayAndOutboundOp(
+                        originCTX = originCTX,
+                        outbound = outbound,
+                        connectTo = connectTo
+                    ).also {relayAndOutboundOp ->
+                        relayAndOutboundOp.connectEstablishedCallback = {
+                            val payload = Unpooled.buffer()
+                            payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
+                            it.writeAndFlush(payload).addListener {
+                                //Trojan protocol only need package once, then send origin data directly
+                                originCTX.pipeline().remove(this)
+                            }
+                        }
+                        relayAndOutboundOp.connectFail = {
+                            ChannelUtils.closeOnFlush(originCTX.channel())
+                        }
+                    }
+                )
+               /* when (outbound.protocol) {
                     "galaxy" -> {
                         Surfer.relayAndOutbound(
                             originCTX = originCTX,
@@ -57,18 +77,12 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                             connectEstablishedCallback = {
                                 val payload = Unpooled.buffer()
                                 payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
-                                logger.trace {
-                                    "id: ${
-                                        originCTX.channel().id().asShortText()
-                                    }, write trojan package to galaxy, payload: $payload"
-                                }
                                 it.writeAndFlush(payload).addListener {
                                     //Trojan protocol only need package once, then send origin data directly
                                     originCTX.pipeline().remove(this)
                                 }
                             },
                             connectFail = {
-                                //while connect failed, write failure response to client, and close the connection
                                 ChannelUtils.closeOnFlush(originCTX.channel())
                             },
                             connectTo = connectTo
@@ -77,26 +91,30 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                     }
 
                     "trojan" -> {
-                        Surfer.relayAndOutbound(originCTX, {
-                            TrojanRelayInboundHandler(
-                                it,
-                                outbound,
-                                ConnectTo(trojanPackage.request.host, trojanPackage.request.port),
-                                firstPackage = true
-                            )
-                        }, outbound, {
-                            val payload = ReferenceCountUtil.releaseLater(Unpooled.buffer())
-                            payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
-                            it.writeAndFlush(payload).addListener {
-                                //Trojan protocol only need package once, then send origin data directly
-                                originCTX.pipeline().remove(this)
-                            }
-                        }, {
-                            //ignored
-                        }, {
-                            originCTX.close()
-                        }, connectTo)
-
+                        Surfer.relayAndOutbound(
+                            originCTX = originCTX,
+                            originCTXRelayHandler = {
+                                TrojanRelayInboundHandler(
+                                    it,
+                                    outbound,
+                                    ConnectTo(trojanPackage.request.host, trojanPackage.request.port),
+                                    firstPackage = true
+                                )
+                            },
+                            outbound = outbound,
+                            connectEstablishedCallback = {
+                                val payload = Unpooled.buffer()
+                                payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
+                                it.writeAndFlush(payload).addListener {
+                                    //Trojan protocol only need package once, then send origin data directly
+                                    originCTX.pipeline().remove(this)
+                                }
+                            },
+                            connectFail = {
+                                ChannelUtils.closeOnFlush(originCTX.channel())
+                            },
+                            connectTo = connectTo
+                        )
                     }
 
                     else -> {
@@ -106,7 +124,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                             }, protocol=${outbound.protocol} not support"
                         )
                     }
-                }
+                }*/
             }
         } else {
             logger.warn { "id: ${originCTX.channel().id().asShortText()}, drop trojan package, no password matched" }
@@ -170,6 +188,9 @@ class TrojanRelayInboundHandler(
 
 }
 
+/**
+ * convert ByteBuf to TrojanPackage
+ */
 fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequest: TrojanRequest): TrojanPackage {
     return TrojanPackage(
         Sha224Utils.encryptAndHex(trojanSetting.password), trojanRequest, ByteBufUtil.hexDump(msg)
