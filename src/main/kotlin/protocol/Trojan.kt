@@ -69,62 +69,6 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                         }
                     }
                 )
-               /* when (outbound.protocol) {
-                    "galaxy" -> {
-                        Surfer.relayAndOutbound(
-                            originCTX = originCTX,
-                            outbound = outbound,
-                            connectEstablishedCallback = {
-                                val payload = Unpooled.buffer()
-                                payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
-                                it.writeAndFlush(payload).addListener {
-                                    //Trojan protocol only need package once, then send origin data directly
-                                    originCTX.pipeline().remove(this)
-                                }
-                            },
-                            connectFail = {
-                                ChannelUtils.closeOnFlush(originCTX.channel())
-                            },
-                            connectTo = connectTo
-                        )
-
-                    }
-
-                    "trojan" -> {
-                        Surfer.relayAndOutbound(
-                            originCTX = originCTX,
-                            originCTXRelayHandler = {
-                                TrojanRelayInboundHandler(
-                                    it,
-                                    outbound,
-                                    ConnectTo(trojanPackage.request.host, trojanPackage.request.port),
-                                    firstPackage = true
-                                )
-                            },
-                            outbound = outbound,
-                            connectEstablishedCallback = {
-                                val payload = Unpooled.buffer()
-                                payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
-                                it.writeAndFlush(payload).addListener {
-                                    //Trojan protocol only need package once, then send origin data directly
-                                    originCTX.pipeline().remove(this)
-                                }
-                            },
-                            connectFail = {
-                                ChannelUtils.closeOnFlush(originCTX.channel())
-                            },
-                            connectTo = connectTo
-                        )
-                    }
-
-                    else -> {
-                        logger.error(
-                            "id: ${
-                                originCTX.channel().id().asShortText()
-                            }, protocol=${outbound.protocol} not support"
-                        )
-                    }
-                }*/
             }
         } else {
             logger.warn { "id: ${originCTX.channel().id().asShortText()}, drop trojan package, no password matched" }

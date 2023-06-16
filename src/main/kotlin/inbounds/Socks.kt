@@ -163,68 +163,6 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                     }
                 }
             )
-           /* when (outbound.protocol) {
-                "galaxy" -> {
-                    Surfer.relayAndOutbound(
-                        originCTX = originCTX,
-                        outbound = outbound,
-                        connectEstablishedCallback = {
-                            originCTX.channel().writeAndFlush(
-                                DefaultSocks5CommandResponse(
-                                    Socks5CommandStatus.SUCCESS,
-                                    message.dstAddrType(),
-                                    message.dstAddr(),
-                                    message.dstPort()
-                                )
-                            ).addListener(ChannelFutureListener {
-                                originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                            })
-                        },
-                        connectFail = {
-                            originCTX.close()
-                        },
-                        connectTo = connectTo
-                    )
-
-                }
-
-                "trojan" -> {
-                    Surfer.relayAndOutbound(
-                        originCTX = originCTX,
-                        originCTXRelayHandler = {
-                            TrojanRelayInboundHandler(
-                                it, outbound, connectTo, firstPackage = true
-                            )
-                        },
-                        outbound = outbound,
-                        connectEstablishedCallback = {
-                            originCTX.channel().writeAndFlush(
-                                DefaultSocks5CommandResponse(
-                                    Socks5CommandStatus.SUCCESS,
-                                    message.dstAddrType(),
-                                    message.dstAddr(),
-                                    message.dstPort()
-                                )
-                            ).addListener(ChannelFutureListener {
-                                originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                            })
-                        },
-                        connectFail = {
-                            originCTX.close()
-                        },
-                        connectTo = connectTo
-                    )
-
-                }
-
-                else -> {
-                    logger.error(
-                        "id: ${
-                            originCTX.channel().id().asShortText()
-                        }, protocol=${outbound.protocol} not support"
-                    )
-                }
-            }*/
         }
 
     }

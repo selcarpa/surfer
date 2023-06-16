@@ -75,60 +75,6 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                     }
                 }
             )
-/*            when (outbound.protocol) {
-                "galaxy" -> {
-                    Surfer.relayAndOutbound(
-                        originCTX = originCTX,
-                        outbound = outbound,
-                        connectEstablishedCallback = {
-                            it.writeAndFlush(encoded).also {
-                                //remove all listener
-                                val pipeline = originCTX.pipeline()
-                                while (pipeline.first() != null) {
-                                    pipeline.removeFirst()
-                                }
-                            }
-                        },
-                        connectFail = {
-                            originCTX.close()
-                        },
-                        connectTo = connectTo
-                    )
-                }
-
-                "trojan" -> {
-                    Surfer.relayAndOutbound(
-                        originCTX = originCTX,
-                        originCTXRelayHandler = {
-                            TrojanRelayInboundHandler(
-                                it, outbound, ConnectTo(uri.host, uri.port), true
-                            )
-                        },
-                        outbound = outbound,
-                        connectEstablishedCallback = {
-                            it.writeAndFlush(encoded).also {
-                                //remove all listener
-                                val pipeline = originCTX.pipeline()
-                                while (pipeline.first() != null) {
-                                    pipeline.removeFirst()
-                                }
-                            }
-                        },
-                        connectFail = {
-                            originCTX.close()
-                        },
-                        connectTo = connectTo
-                    )
-                }
-
-                else -> {
-                    logger.error(
-                        "[${
-                            originCTX.channel().id().asShortText()
-                        }], protocol=${outbound.protocol} not support"
-                    )
-                }
-            }*/
 //            ReferenceCountUtil.release(encoded)
         }
 
@@ -178,78 +124,6 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                     }
                 }
             )
-           /* when (outbound.protocol) {
-                "galaxy" -> {
-                    Surfer.relayAndOutbound(
-                        originCTX = originCTX,
-                        outbound = outbound,
-                        connectEstablishedCallback = {
-                            //write Connection Established
-                            originCTX.writeAndFlush(
-                                DefaultHttpResponse(
-                                    request.protocolVersion(),
-                                    HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
-                                )
-                            ).also {
-                                //remove all listener
-                                val pipeline = originCTX.pipeline()
-                                while (pipeline.first() != null) {
-                                    pipeline.removeFirst()
-                                }
-                            }
-                        },
-                        connectFail = {
-                            //todo: When the remote cannot be connected, the origin needs to be notified correctly
-                            logger.warn { "from id: ${originCTX.channel().id().asShortText()}, connect to remote fail" }
-                            originCTX.close()
-                        },
-                        connectTo = connectTo
-                    )
-                }
-
-                "trojan" -> {
-                    Surfer.relayAndOutbound(
-                        originCTX = originCTX,
-                        originCTXRelayHandler = {
-                            TrojanRelayInboundHandler(
-                                it, outbound, ConnectTo(uri.host, uri.port), true
-                            )
-                        },
-
-                        outbound = outbound,
-                        connectEstablishedCallback = {
-                            //write Connection Established
-                            originCTX.writeAndFlush(
-                                DefaultHttpResponse(
-                                    request.protocolVersion(),
-                                    HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
-                                )
-                            ).also {
-                                //remove all listener
-                                val pipeline = originCTX.pipeline()
-                                while (pipeline.first() != null) {
-                                    pipeline.removeFirst()
-                                }
-                            }
-                        },
-                        connectFail = {
-                            //todo: When the remote cannot be connected, the origin needs to be notified correctly
-                            logger.warn { "from id: ${originCTX.channel().id().asShortText()}, connect to remote fail" }
-                            originCTX.close()
-                        },
-                        connectTo = connectTo
-                    )
-
-                }
-
-                else -> {
-                    logger.error(
-                        "id: ${
-                            originCTX.channel().id().asShortText()
-                        }, protocol=${outbound.protocol} not support"
-                    )
-                }
-            }*/
         }
     }
 }
