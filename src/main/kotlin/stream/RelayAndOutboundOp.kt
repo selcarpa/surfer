@@ -4,14 +4,14 @@ import io.netty.channel.Channel
 import io.netty.channel.ChannelFuture
 import io.netty.channel.ChannelHandlerContext
 import model.config.Outbound
-import model.protocol.ConnectTo
+import model.protocol.Odor
 import utils.ChannelUtils
 
 /**
  * Abstract Relay and outbound operation, including some necessary parameters for the operation
  */
 data class RelayAndOutboundOp(
-    val originCTX: ChannelHandlerContext, val outbound: Outbound, val connectTo: ConnectTo
+    val originCTX: ChannelHandlerContext, val outbound: Outbound, val odor: Odor
 ) {
     /**
      * relay handler for origin channel, override it when it is necessary

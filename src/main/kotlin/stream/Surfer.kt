@@ -5,6 +5,7 @@ import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
+import io.netty.channel.socket.nio.NioDatagramChannel
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.DefaultHttpHeaders
 import io.netty.handler.codec.http.HttpClientCodec
@@ -29,7 +30,8 @@ import io.netty.util.concurrent.Promise
 import model.PROXY_HANDLER_NAME
 import model.RELAY_HANDLER_NAME
 import model.config.*
-import model.protocol.ConnectTo
+import model.protocol.Odor
+import model.protocol.Protocol
 import mu.KotlinLogging
 import protocol.DiscardHandler
 import protocol.TrojanRelayInboundHandler
@@ -62,7 +64,7 @@ fun relayAndOutbound(relayAndOutboundOp: RelayAndOutboundOp) {
                     TrojanRelayInboundHandler(
                         it,
                         relayAndOutboundOp.outbound,
-                        relayAndOutboundOp.connectTo,
+                        relayAndOutboundOp.odor,
                         firstPackage = true
                     )
                 }
@@ -81,7 +83,7 @@ fun relayAndOutbound(relayAndOutboundOp: RelayAndOutboundOp) {
         connectEstablishedCallback = relayAndOutboundOp.connectEstablishedCallback,
         afterAddRelayHandler = relayAndOutboundOp.afterAddRelayHandler,
         connectFail = relayAndOutboundOp.connectFail,
-        connectTo = relayAndOutboundOp.connectTo
+        odor = relayAndOutboundOp.odor
     )
 }
 
@@ -92,7 +94,7 @@ fun relayAndOutbound(
     connectEstablishedCallback: (Channel) -> ChannelFuture,
     afterAddRelayHandler: (Channel) -> Unit = {},
     connectFail: () -> Unit = {},
-    connectTo: ConnectTo
+    odor: Odor
 ) {
 
     val connectListener = FutureListener<Channel> { future ->
@@ -116,8 +118,7 @@ fun relayAndOutbound(
         outbound = outbound,
         connectListener = connectListener,
         eventLoopGroup = originCTX.channel().eventLoop(),
-        socketAddress = connectTo.socketAddress()
-
+        odor = odor
     )
 }
 
@@ -128,35 +129,35 @@ fun relayAndOutbound(
 private fun outbound(
     outbound: Outbound,
     connectListener: FutureListener<Channel>,
-    socketAddress: InetSocketAddress,
+    odor: Odor,
     eventLoopGroup: EventLoopGroup = NioEventLoopGroup()
 ) {
     if (outbound.outboundStreamBy == null) {
-        return galaxy(connectListener, socketAddress, eventLoopGroup)
+        return galaxy(connectListener, odor, eventLoopGroup)
     }
     return when (outbound.outboundStreamBy.type) {
-        "wss" -> wssStream(
-            connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup
+        "wss" ->  wssStream(
+            connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup, odor
         )
 
         "ws" -> wsStream(
-            connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup
+            connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup, odor
         )
 
         "socks5" -> socks5Stream(
-            connectListener, outbound.outboundStreamBy.sock5OutboundSetting!!, eventLoopGroup, socketAddress
+            connectListener, outbound.outboundStreamBy.sock5OutboundSetting!!, eventLoopGroup, odor
         )
 
         "http" -> httpStream(
-            connectListener, outbound.outboundStreamBy.httpOutboundSetting!!, eventLoopGroup, socketAddress
+            connectListener, outbound.outboundStreamBy.httpOutboundSetting!!, eventLoopGroup, odor
         )
 
         "tcp" -> tcpStream(
-            connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup
+            connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup, odor
         )
 
         "tls" -> tlsStream(
-            connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup
+            connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup, odor
         )
 
 
@@ -169,8 +170,11 @@ private fun outbound(
 private fun tlsStream(
     connectListener: FutureListener<Channel>,
     tcpOutboundSetting: TcpOutboundSetting,
-    eventLoopGroup: EventLoopGroup
+    eventLoopGroup: EventLoopGroup,
+    odor: Odor
 ) {
+    odor.redirectPort=tcpOutboundSetting.port
+    odor.redirectHost=tcpOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
     promise.addListener(connectListener)
     val sslCtx: SslContext =
@@ -182,15 +186,18 @@ private fun tlsStream(
                 HandlerPair(sslCtx.newHandler(it.alloc(), tcpOutboundSetting.host, tcpOutboundSetting.port))
 
             )
-        }, InetSocketAddress(tcpOutboundSetting.host, tcpOutboundSetting.port)
+        }, odor
     )
 }
 
 private fun tcpStream(
     connectListener: FutureListener<Channel>,
     tcpOutboundSetting: TcpOutboundSetting,
-    eventLoopGroup: EventLoopGroup
+    eventLoopGroup: EventLoopGroup,
+    odor: Odor
 ) {
+    odor.redirectPort=tcpOutboundSetting.port
+    odor.redirectHost=tcpOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
     promise.addListener(connectListener)
 
@@ -199,15 +206,18 @@ private fun tcpStream(
             mutableListOf(
                 HandlerPair(ChannelActiveHandler(promise))
             )
-        }, InetSocketAddress(tcpOutboundSetting.host, tcpOutboundSetting.port)
+        }, odor
     )
 }
 
 private fun wssStream(
     connectListener: FutureListener<Channel>,
     wsOutboundSetting: WsOutboundSetting,
-    eventLoopGroup: EventLoopGroup
+    eventLoopGroup: EventLoopGroup,
+    odor: Odor
 ) {
+    odor.redirectPort=wsOutboundSetting.port
+    odor.redirectHost=wsOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
     promise.addListener(connectListener)
 
@@ -232,14 +242,17 @@ private fun wssStream(
             ),
             HandlerPair(WebsocketDuplexHandler(promise))
         )
-    }, InetSocketAddress(uri.host, uri.port))
+    }, odor)
 }
 
 private fun wsStream(
     connectListener: FutureListener<Channel>,
     wsOutboundSetting: WsOutboundSetting,
-    eventLoopGroup: EventLoopGroup
+    eventLoopGroup: EventLoopGroup,
+    odor: Odor
 ) {
+    odor.redirectHost=wsOutboundSetting.host
+    odor.redirectPort=wsOutboundSetting.port
     val promise = eventLoopGroup.next().newPromise<Channel>()
     promise.addListener(connectListener)
 
@@ -259,27 +272,27 @@ private fun wsStream(
             ),
             HandlerPair(WebsocketDuplexHandler(promise))
         )
-    }, InetSocketAddress(uri.host, uri.port))
+    }, odor)
 
 }
 
 
 private fun galaxy(
-    connectListener: FutureListener<Channel>, socketAddress: InetSocketAddress, eventLoopGroup: EventLoopGroup
+    connectListener: FutureListener<Channel>, odor: Odor, eventLoopGroup: EventLoopGroup
 ) {
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     connect(eventLoopGroup, {
         mutableListOf(
             HandlerPair(ChannelActiveHandler(promise))
         )
-    }, socketAddress)
+    }, odor)
 }
 
 private fun httpStream(
     connectListener: FutureListener<Channel>,
     httpOutboundSetting: HttpOutboundSetting,
     eventLoopGroup: EventLoopGroup,
-    socketAddress: InetSocketAddress
+    socketAddress: Odor
 ) {
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     val proxyHandler = if (httpOutboundSetting.auth == null) {
@@ -307,7 +320,7 @@ private fun socks5Stream(
     connectListener: FutureListener<Channel>,
     socks5OutboundSetting: Sock5OutboundSetting,
     eventLoopGroup: EventLoopGroup,
-    socketAddress: InetSocketAddress
+    odor: Odor
 ) {
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     val proxyHandler = if (socks5OutboundSetting.auth == null) {
@@ -328,34 +341,58 @@ private fun socks5Stream(
             HandlerPair(proxyHandler, PROXY_HANDLER_NAME),
             HandlerPair(ChannelActiveHandler(promise))
         )
-    }, socketAddress)
+    }, odor)
 }
 
 private fun connect(
     eventLoopGroup: EventLoopGroup,
     handlerInitializer: (Channel) -> MutableList<HandlerPair>,
-    inetSocketAddress: InetSocketAddress
+    odor: Odor
 ) {
-    connect(eventLoopGroup, object : ChannelInitializer<Channel>() {
-        override fun initChannel(ch: Channel) {
-            handlerInitializer(ch).forEach {
-                if (it.name != null) {
-                    ch.pipeline().addLast(it.name, it.handler)
-                } else {
-                    ch.pipeline().addLast(it.handler)
-                }
-            }
-        }
-    }, inetSocketAddress)
+    var protocol = odor.desProtocol
+    while (protocol.superProtocol != null) {
+        protocol = protocol.superProtocol!!
+    }
+    if (protocol == Protocol.TCP) {
+        connectTcp(eventLoopGroup, SurferInitializer(handlerInitializer), odor.socketAddress())
+    } else if (protocol == Protocol.UDP) {
+        connectUdp(eventLoopGroup, SurferInitializer(handlerInitializer), odor.socketAddress())
+    }
 
 }
 
-private fun connect(
+class SurferInitializer(private val handlerInitializer: (Channel) -> MutableList<HandlerPair>) :
+    ChannelInitializer<Channel>() {
+    override fun initChannel(ch: Channel) {
+        handlerInitializer(ch).forEach {
+            if (it.name != null) {
+                ch.pipeline().addLast(it.name, it.handler)
+            } else {
+                ch.pipeline().addLast(it.handler)
+            }
+        }
+    }
+}
+
+private fun connectTcp(
     eventLoopGroup: EventLoopGroup,
     channelInitializer: ChannelInitializer<Channel>,
     socketAddress: InetSocketAddress
 ) {
-    Bootstrap().group(eventLoopGroup).channel(NioSocketChannel::class.java)
+    Bootstrap().group(eventLoopGroup)
+        .channel(NioSocketChannel::class.java)
+        .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+        .handler(channelInitializer)
+        .connect(socketAddress)
+}
+
+private fun connectUdp(
+    eventLoopGroup: EventLoopGroup,
+    channelInitializer: ChannelInitializer<Channel>,
+    socketAddress: InetSocketAddress
+) {
+    Bootstrap().group(eventLoopGroup)
+        .channel(NioDatagramChannel::class.java)
         .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
         .handler(channelInitializer)
         .connect(socketAddress)
@@ -380,7 +417,7 @@ class ChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuple
 }
 
 /**
- * ssl activator for client connected, when ssl handshake complete, we can active other operation
+ * ssl activator for client connected, when ssl handshake complete, we can activate other operation
  */
 class SslActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHandler() {
     private val logger = KotlinLogging.logger {}

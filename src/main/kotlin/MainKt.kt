@@ -13,7 +13,7 @@ object MainKt {
             if (it.startsWith("-c=")) {
                 ConfigurationUrl = it.replace("-c=", "")
             }
-            if(it.equals("-memstat")){
+            if(it == "-memstat"){
                 startMemoryStatisticPrint()
             }
         }

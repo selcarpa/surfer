@@ -9,7 +9,7 @@ import io.netty.handler.codec.socksx.SocksMessage
 import io.netty.handler.codec.socksx.SocksVersion
 import io.netty.handler.codec.socksx.v5.*
 import model.config.Inbound
-import model.protocol.ConnectTo
+import model.protocol.Odor
 import mu.KotlinLogging
 import route.Route
 import stream.RelayAndOutboundOp
@@ -139,12 +139,12 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
             message.type()
         )
         resolveOutbound.ifPresent { outbound ->
-            val connectTo = ConnectTo(message.dstAddr(), message.dstPort())
+            val odor = Odor(message.dstAddr(), message.dstPort())
             relayAndOutbound(
                 RelayAndOutboundOp(
                     originCTX = originCTX,
                     outbound = outbound,
-                    connectTo = connectTo
+                    odor = odor
                 ).also {relayAndOutboundOp ->
                     relayAndOutboundOp.connectEstablishedCallback = {
                         originCTX.channel().writeAndFlush(

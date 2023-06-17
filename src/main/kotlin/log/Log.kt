@@ -58,13 +58,13 @@ fun loadLogConfig() {
         rollingFileAppender.name = "logFile"
         rollingFileAppender.encoder = logEncoder
         rollingFileAppender.isAppend = true
-        rollingFileAppender.file = "${logConfiguration.path}${File.separator}${logConfiguration.fileName}.log"
+        rollingFileAppender.file = "${logConfiguration.path.removeSuffix("/")}${File.separator}${logConfiguration.fileName.removePrefix("/")}.log"
 
         //init log rolling policy
         val logFilePolicy: SizeAndTimeBasedRollingPolicy<*> = SizeAndTimeBasedRollingPolicy<Any?>()
         logFilePolicy.context = logCtx
         logFilePolicy.setParent(rollingFileAppender)
-        logFilePolicy.fileNamePattern = "${logConfiguration.path}/${logConfiguration.fileName}-%d{yyyy-MM-dd}-%i.zip"
+        logFilePolicy.fileNamePattern = "${logConfiguration.path.removeSuffix("/")}${File.separator}${logConfiguration.fileName.removePrefix("/")}-%d{yyyy-MM-dd}-%i.log.zip"
         logFilePolicy.maxHistory = logConfiguration.maxHistory
         logFilePolicy.setMaxFileSize(FileSize.valueOf("50mb"))
         logFilePolicy.start()

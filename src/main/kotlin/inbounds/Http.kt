@@ -7,7 +7,7 @@ import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.*
 import model.config.Inbound
-import model.protocol.ConnectTo
+import model.protocol.Odor
 import mu.KotlinLogging
 import route.Route
 import stream.RelayAndOutboundOp
@@ -50,7 +50,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
         }
         logger.trace("http proxy outbound from {}, content: {}", originCTX.channel().id().asShortText(), request)
         resolveOutbound.ifPresent { outbound ->
-            val connectTo = ConnectTo(uri.host, port)
+            val odor = Odor(uri.host, port)
             val ch = EmbeddedChannel(HttpRequestEncoder())
             ch.writeOutbound(request)
             val encoded = ch.readOutbound<ByteBuf>()
@@ -59,7 +59,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                 RelayAndOutboundOp(
                     originCTX = originCTX,
                     outbound = outbound,
-                    connectTo = connectTo
+                    odor = odor
                 ).also { relayAndOutboundOp ->
                     relayAndOutboundOp.connectEstablishedCallback = {
                         it.writeAndFlush(encoded).also {
@@ -95,12 +95,12 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
             else -> uri.port
         }
         resolveOutbound.ifPresent { outbound ->
-            val connectTo = ConnectTo(uri.host, port)
+            val odor = Odor(uri.host, port)
             relayAndOutbound(
                 RelayAndOutboundOp(
                     originCTX = originCTX,
                     outbound = outbound,
-                    connectTo = connectTo
+                    odor = odor
                 ).also {relayAndOutboundOp ->
                     relayAndOutboundOp.connectEstablishedCallback = {
                         //write Connection Established

@@ -13,7 +13,7 @@ import io.netty.util.ReferenceCountUtil
 import model.config.Inbound
 import model.config.Outbound
 import model.config.TrojanSetting
-import model.protocol.ConnectTo
+import model.protocol.Odor
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
@@ -35,7 +35,6 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
             TrojanPackage.parse(msg)
         } catch (e: DecoderException) {
             logger.warn { "parse trojan package failed, ${e.message}" }
-//            ReferenceCountUtil.release(msg)
             return
         }
 
@@ -49,12 +48,12 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                 }], addr: ${trojanPackage.request.host}:${trojanPackage.request.port}"
             )
             Route.resolveOutbound(inbound).ifPresent { outbound ->
-                val connectTo = ConnectTo(trojanPackage.request.host, trojanPackage.request.port)
+                val odor = Odor(trojanPackage.request.host, trojanPackage.request.port)
                 relayAndOutbound(
                     RelayAndOutboundOp(
                         originCTX = originCTX,
                         outbound = outbound,
-                        connectTo = connectTo
+                        odor = odor
                     ).also {relayAndOutboundOp ->
                         relayAndOutboundOp.connectEstablishedCallback = {
                             val payload = Unpooled.buffer()
@@ -95,13 +94,13 @@ class TrojanRelayInboundHandler(
     }
 
     constructor(
-        outboundChannel: Channel, outbound: Outbound, connectTo: ConnectTo, firstPackage: Boolean = false
+        outboundChannel: Channel, outbound: Outbound, odor: Odor, firstPackage: Boolean = false
     ) : this(
         outboundChannel, outbound.trojanSetting!!, TrojanRequest(
             Socks5CommandType.CONNECT.byteValue(),
-            connectTo.addressType().byteValue(),
-            connectTo.address,
-            connectTo.port
+            odor.addressType().byteValue(),
+            odor.host,
+            odor.port
         ), firstPackage = firstPackage
     )
 
