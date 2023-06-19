@@ -8,8 +8,9 @@
 name: Gradle Package
 
 on:
-  release:
-    types: [created]
+  push:
+    tags:
+      - '*-SNAPSHOT' # Push events to matching branches with a -SNAPSHOT suffix
 
 jobs:
   build:
@@ -27,19 +28,13 @@ jobs:
         java-version: '11'
         distribution: 'temurin'
         server-id: github # Value of the distributionManagement/repository/id field of the pom.xml
-        settings-path: ${{ github.workspace }} # location for the settings.xml file
 
     - name: Build with Gradle
-      uses: gradle/gradle-build-action@67421db6bd0bf253fb4bd25b31ebb98943c375e1
+      uses: gradle/gradle-build-action@v2
       with:
         arguments: build
 
-    # The USERNAME and TOKEN need to correspond to the credentials environment variables used in
-    # the publishing section of your build.gradle
-    - name: Publish to GitHub Packages
-      uses: gradle/gradle-build-action@67421db6bd0bf253fb4bd25b31ebb98943c375e1
+    - uses: ncipollo/release-action@v1
       with:
-        arguments: publish
-      env:
-        USERNAME: ${{ github.actor }}
-        TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        artifacts: "build/libs/*-all.jar"
+        token: ${{ secrets.GITHUB_TOKEN }}
