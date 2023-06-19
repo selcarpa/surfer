@@ -24,6 +24,7 @@ import io.netty.handler.ssl.SslCompletionEvent
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
+import io.netty.handler.timeout.IdleStateHandler
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
@@ -33,6 +34,7 @@ import model.config.*
 import model.protocol.Odor
 import model.protocol.Protocol
 import mu.KotlinLogging
+import netty.IdleCloseHandler
 import protocol.DiscardHandler
 import protocol.TrojanRelayInboundHandler
 import utils.ChannelUtils
@@ -135,31 +137,30 @@ private fun outbound(
     if (outbound.outboundStreamBy == null) {
         return galaxy(connectListener, odor, eventLoopGroup)
     }
-    return when (outbound.outboundStreamBy.type) {
-        "wss" ->  wssStream(
+    return when (Protocol.valueOfOrNull(outbound.outboundStreamBy.type)) {
+        Protocol.WSS ->  wssStream(
             connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup, odor
         )
 
-        "ws" -> wsStream(
+        Protocol.WS -> wsStream(
             connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup, odor
         )
 
-        "socks5" -> socks5Stream(
+        Protocol.SOCKS5 -> socks5Stream(
             connectListener, outbound.outboundStreamBy.sock5OutboundSetting!!, eventLoopGroup, odor
         )
 
-        "http" -> httpStream(
+        Protocol.HTTP -> httpStream(
             connectListener, outbound.outboundStreamBy.httpOutboundSetting!!, eventLoopGroup, odor
         )
 
-        "tcp" -> tcpStream(
+        Protocol.TCP -> tcpStream(
             connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup, odor
         )
 
-        "tls" -> tlsStream(
+        Protocol.TLS -> tlsStream(
             connectListener, outbound.outboundStreamBy.tcpOutboundSetting!!, eventLoopGroup, odor
         )
-
 
         else -> {
             logger.error { "stream type ${outbound.outboundStreamBy.type} not supported" }
@@ -346,31 +347,32 @@ private fun socks5Stream(
 
 private fun connect(
     eventLoopGroup: EventLoopGroup,
-    handlerInitializer: (Channel) -> MutableList<HandlerPair>,
+    handlerPairs: (Channel) -> MutableList<HandlerPair>,
     odor: Odor
 ) {
-    var protocol = odor.desProtocol
-    while (protocol.superProtocol != null) {
-        protocol = protocol.superProtocol!!
-    }
+    val protocol = odor.desProtocol.topProtocol()
     if (protocol == Protocol.TCP) {
-        connectTcp(eventLoopGroup, SurferInitializer(handlerInitializer), odor.socketAddress())
+        connectTcp(eventLoopGroup, SurferInitializer(handlerPairs), odor.socketAddress())
     } else if (protocol == Protocol.UDP) {
-        connectUdp(eventLoopGroup, SurferInitializer(handlerInitializer), odor.socketAddress())
+        connectUdp(eventLoopGroup, SurferInitializer(handlerPairs), odor.socketAddress())
     }
 
 }
 
-class SurferInitializer(private val handlerInitializer: (Channel) -> MutableList<HandlerPair>) :
+class SurferInitializer(private val handlerPairs: (Channel) -> MutableList<HandlerPair>) :
     ChannelInitializer<Channel>() {
     override fun initChannel(ch: Channel) {
-        handlerInitializer(ch).forEach {
+        //todo: set idle timeout, and close channel
+        ch.pipeline().addFirst(IdleStateHandler(300, 300, 300))
+        ch.pipeline().addFirst(IdleCloseHandler())
+        handlerPairs(ch).forEach {
             if (it.name != null) {
                 ch.pipeline().addLast(it.name, it.handler)
             } else {
                 ch.pipeline().addLast(it.handler)
             }
         }
+
     }
 }
 

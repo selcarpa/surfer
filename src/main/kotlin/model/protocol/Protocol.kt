@@ -3,18 +3,26 @@ package model.protocol
 enum class Protocol(val superProtocol: Protocol?) {
     TCP(null),
     UDP(null),
+    TLS(TCP),
     HTTP(TCP),
     SOCKS5(TCP),
     U_KCP(UDP),
     T_KCP(TCP),
+
     //websocket
     WS(HTTP),
+
     //websocket secure
     WSS(HTTP),
+
     // NULL is a special protocol, it means that the protocol is not determined
     NULL(null),
+
     // trojan can be transmitted in any stream
     TROJAN(null),
+
+    //galaxy is an outbound protocol
+    GALAXY(null)
     ;
 
     companion object {
@@ -25,6 +33,14 @@ enum class Protocol(val superProtocol: Protocol?) {
                 NULL
             }
         }
+    }
+
+    fun topProtocol(): Protocol {
+        var protocol = this
+        while (protocol.superProtocol != null) {
+            protocol = protocol.superProtocol!!
+        }
+        return protocol
     }
 
 

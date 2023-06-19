@@ -4,8 +4,6 @@ package netty
 import inbounds.HttpProxyServerHandler
 import inbounds.SocksServerHandler
 import io.netty.channel.Channel
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.HttpContentCompressor
@@ -14,12 +12,12 @@ import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
 import io.netty.handler.stream.ChunkedWriteHandler
-import io.netty.handler.timeout.IdleStateEvent
 import io.netty.handler.timeout.IdleStateHandler
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
 import model.config.ConfigurationSettings.Companion.Configuration
 import model.config.Inbound
+import model.protocol.Protocol
 import mu.KotlinLogging
 import protocol.TrojanInboundHandler
 import stream.WebsocketDuplexHandler
@@ -36,33 +34,40 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
         val localAddress = ch.localAddress()
 
-        val portInboundMap = Configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
+        val portInboundMap =
+            Configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
         val inbound = portInboundMap[localAddress.port]
         //todo: set idle timeout, and close channel
-        ch.pipeline().addFirst(IdleStateHandler(300,300,300))
+        ch.pipeline().addFirst(IdleStateHandler(300, 300, 300))
         ch.pipeline().addFirst(IdleCloseHandler())
         //todo refactor to strategy pattern
         if (inbound != null) {
-            when (inbound.protocol) {
-                "http" -> {
+            when (Protocol.valueOfOrNull(inbound.protocol)) {
+                Protocol.HTTP -> {
                     initHttpInbound(ch, inbound)
                     return
                 }
 
-                "socks5" -> {
+                Protocol.SOCKS5 -> {
                     initSocksInbound(ch, inbound)
                     return
                 }
 
-                "trojan" -> {
+                Protocol.TROJAN -> {
                     initTrojanInbound(ch, inbound)
                     return
                 }
+
+                else -> {
+                    //ignored
+                }
             }
-        } else {
-            logger.error("not support inbound")
-            ch.close()
         }
+        logger.error(
+            "not support inbound: ${inbound?.protocol}"
+        )
+        ch.close()
+
     }
 
     private fun initSocksInbound(ch: NioSocketChannel, inbound: Inbound) {
@@ -76,20 +81,26 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
             HttpServerCodec(),
             HttpContentCompressor(),
             HttpObjectAggregator(Int.MAX_VALUE),
-            HttpProxyServerHandler(inbound))
+            HttpProxyServerHandler(inbound)
+        )
     }
 
     private fun initTrojanInbound(ch: NioSocketChannel, inbound: Inbound) {
-        when (inbound.inboundStreamBy!!.type) {
-            "ws" -> {
+        when (Protocol.valueOfOrNull(inbound.inboundStreamBy!!.type)) {
+            Protocol.WS -> {
                 val handleShakePromise = ch.eventLoop().next().newPromise<Channel>()
-                handleShakePromise.addListener (FutureListener { future ->
+                handleShakePromise.addListener(FutureListener { future ->
                     if (future.isSuccess) {
                         future.get().pipeline().addLast(TrojanInboundHandler(inbound))
                     }
                 })
 
                 initWebsocketInbound(ch, inbound.inboundStreamBy.wsInboundSetting.path, handleShakePromise)
+            }
+
+            else -> {
+                logger.error("not support inbound stream by: ${inbound.inboundStreamBy.type}")
+                ch.close()
             }
         }
 
@@ -111,16 +122,3 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 }
 
 
-/**
- * when channel idle, close it
- */
-class IdleCloseHandler: ChannelInboundHandlerAdapter(){
-    override fun userEventTriggered(ctx: ChannelHandlerContext?, evt: Any?) {
-        when(evt){
-            is IdleStateEvent -> {
-                ctx?.close()
-            }
-        }
-        super.userEventTriggered(ctx, evt)
-    }
-}

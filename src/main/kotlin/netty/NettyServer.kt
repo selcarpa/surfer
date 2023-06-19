@@ -62,18 +62,13 @@ object NettyServer {
     }
 
     private fun transmissionAssert(inbound: Inbound, desProtocol: Protocol): Boolean {
-        var protocol = Protocol.valueOfOrNull(inbound.protocol)
-        while (protocol.superProtocol != null) {
-            protocol = protocol.superProtocol!!
-        }
+        var protocol = Protocol.valueOfOrNull(inbound.protocol).topProtocol()
         if (protocol == desProtocol) {
             return true
         }
         if (inbound.inboundStreamBy != null) {
             protocol = Protocol.valueOfOrNull(inbound.inboundStreamBy.type)
-            while (protocol.superProtocol != null) {
-                protocol = protocol.superProtocol!!
-            }
+            protocol = protocol.topProtocol()
             if (protocol == desProtocol) {
                 return true
             }
