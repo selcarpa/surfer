@@ -8,8 +8,9 @@ import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.*
 import model.config.Inbound
 import model.protocol.Odor
+import model.protocol.Protocol
 import mu.KotlinLogging
-import route.Route
+import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.relayAndOutbound
 import java.net.URI
@@ -42,19 +43,19 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
     private fun httpProxy(originCTX: ChannelHandlerContext, request: HttpRequest) {
         // If implement http capture, to code right here
         val uri = URI(request.uri())
-        val resolveOutbound = Route.resolveOutbound(inbound)
-
         val port = when (uri.port) {
             -1 -> 80
             else -> uri.port
         }
+        val odor = Odor(host = uri.host, port = port, originProtocol = Protocol.HTTP, desProtocol = Protocol.HTTP)
+        val ch = EmbeddedChannel(HttpRequestEncoder())
+        ch.writeOutbound(request)
+        val encoded = ch.readOutbound<ByteBuf>()
+        ch.close()
+        val resolveOutbound = resolveOutbound(inbound,odor)
+
         logger.trace("http proxy outbound from {}, content: {}", originCTX.channel().id().asShortText(), request)
         resolveOutbound.ifPresent { outbound ->
-            val odor = Odor(uri.host, port)
-            val ch = EmbeddedChannel(HttpRequestEncoder())
-            ch.writeOutbound(request)
-            val encoded = ch.readOutbound<ByteBuf>()
-            ch.close()
             relayAndOutbound(
                 RelayAndOutboundOp(
                     originCTX = originCTX,
@@ -88,7 +89,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                 "https://${request.uri()}"
             }
         )
-        val resolveOutbound = Route.resolveOutbound(inbound)
+        val resolveOutbound = resolveOutbound(inbound)
 
         val port = when (uri.port) {
             -1 -> 443

@@ -37,13 +37,13 @@ java -jar surfer.jar -c=config.json
     path: "/var/log/surfer"
   },
   inbounds: [
-    //Inbound (refer: inbound section)
+    //Inbound(refer: inbound section)
   ],
   outbounds: [
-    //Outbound
+    //Outbound(refer: outbound section)
   ],
   rules: [
-    //Rule
+    //Rule(refer: rule section)
   ]
 }
 ```
@@ -67,8 +67,10 @@ java -jar surfer.jar -c=config.json
 {
   port: 14270,
   protocol: "socks5",
-  socks5Setting: {//optional
-    auth: {//optional, if not set, no authentication
+  socks5Setting: {
+    //optional
+    auth: {
+      //optional, if not set, no authentication
       username: "username",
       password: "password"
     }
@@ -79,20 +81,24 @@ java -jar surfer.jar -c=config.json
 ##### trojan inbound
 
 ```json5
-  {
+{
   "protocol": "trojan",
   "port": 14270,
-  "inboundStreamBy": {//when inbound protocol is trojan, this field is required
-    "type": "ws",//ws is only supported now
-    "wsInboundSetting": {//when inboundStreamBy.type is ws, this field is required 
-      "path": "/path"//ws path, must set
+  //when inbound protocol is trojan, this field is required
+  "inboundStreamBy": {
+    //ws is only supported now
+    "type": "ws",
+    //when inboundStreamBy.type is ws, this field is required 
+    "wsInboundSetting": {
+      //ws path, must set
+      "path": "/path"
     }
   },
-  "trojanSettings": [//when inbound protocol is trojan, this field is required
-    {//1 item at least
-      "password": "password"//password, must set
-    }
-  ]
+  //when inbound protocol is trojan, this field is required
+  "trojanSetting": {
+    //password, must set
+    "password": "password"
+  }
 }
 ```
 
@@ -103,17 +109,64 @@ java -jar surfer.jar -c=config.json
 ```json5
 {
   protocol: "galaxy",
+  //optional
   outboundStreamBy: {
-    //optional
-    type: "http",//http and socks5 are supported now
-    httpOutboundSetting: {//when outboundStreamBy.type is http, this field is required
+    //http and socks5 are supported now
+    type: "http",
+    //when outboundStreamBy.type is http, this field is required
+    httpOutboundSetting: {
       host: "127.0.0.1",
       port: 8080
     },
-    sock5OutboundSetting: {//when outboundStreamBy.type is socks5, this field is required
+    //when outboundStreamBy.type is socks5, this field is required
+    sock5OutboundSetting: {
       host: "127.0.0.1",
       port: 8080
     }
   }
+}
+```
+
+#### Rule
+
+```json5
+{
+  rules: [
+    //RuleItem
+    {
+      //optional content and priority: tagged, sniffed
+      type: "",
+      //when type is tagged, tag is required
+      tag: "",
+      //when type is sniffed, protocol destPattern has at least one
+      protocol: "",
+      //regex pattern for destination address
+      destPattern: "",
+      //when rule has same type, the order is used to determine which rule to use 
+      order: ""
+    }
+  ]
+}
+```
+
+##### tagged
+
+```json5
+{
+  type: "tagged",
+  //tag name
+  tag: ""
+}
+```
+
+##### sniffed
+
+```json5
+{
+  type: "sniffed",
+  //optional, for examples: tcp, udp, http
+  protocol: "",
+  //optional, regex pattern for destination address
+  destPattern: "",
 }
 ```

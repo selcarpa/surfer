@@ -11,7 +11,7 @@ import io.netty.handler.codec.socksx.v5.*
 import model.config.Inbound
 import model.protocol.Odor
 import mu.KotlinLogging
-import route.Route
+import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.relayAndOutbound
 import utils.ChannelUtils
@@ -131,7 +131,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
      * socks5 command
      */
     private fun socks5Command(originCTX: ChannelHandlerContext, message: Socks5CommandRequest) {
-        val resolveOutbound = Route.resolveOutbound(inbound)
+        val resolveOutbound = resolveOutbound(inbound)
         logger.info(
             "socks5 inbound: [{}], uri: {}, command: {}",
             originCTX.channel().id().asShortText(),

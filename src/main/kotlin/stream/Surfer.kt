@@ -46,8 +46,14 @@ private val logger = KotlinLogging.logger {}
 /**
  * Handle all incoming messages, and relay them to the outbound
  */
-fun union(){
-    //todo
+fun union(relayAndOutboundOp: RelayAndOutboundOp,inbound: Inbound, odor: Odor) {
+//    val outboundOptional = resolveOutbound(inbound, odor)
+//
+//    if (outboundOptional.isPresent) {
+//        resolveOutbound(relayAndOutboundOp)
+//    }else{
+//        logger.error { "outbound not found" }
+//    }
 }
 
 /**

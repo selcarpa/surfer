@@ -17,7 +17,7 @@ import model.protocol.Odor
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
-import route.Route
+import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.RelayInboundHandler
 import stream.relayAndOutbound
@@ -38,23 +38,23 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
             return
         }
 
-        val trojanSetting = inbound.trojanSettings!!.stream().filter {
-            ByteBufUtil.hexDump(Sha224Utils.encryptAndHex(it.password).toByteArray()) == trojanPackage.hexSha224Password
-        }.findFirst()
-        if (trojanSetting.isPresent) {
+        if (ByteBufUtil.hexDump(
+                Sha224Utils.encryptAndHex(inbound.trojanSetting!!.password).toByteArray()
+            ) == trojanPackage.hexSha224Password
+        ) {
             logger.info(
                 "trojan inbound: [${
                     originCTX.channel().id().asShortText()
                 }], addr: ${trojanPackage.request.host}:${trojanPackage.request.port}"
             )
-            Route.resolveOutbound(inbound).ifPresent { outbound ->
+            resolveOutbound(inbound).ifPresent { outbound ->
                 val odor = Odor(trojanPackage.request.host, trojanPackage.request.port)
                 relayAndOutbound(
                     RelayAndOutboundOp(
                         originCTX = originCTX,
                         outbound = outbound,
                         odor = odor
-                    ).also {relayAndOutboundOp ->
+                    ).also { relayAndOutboundOp ->
                         relayAndOutboundOp.connectEstablishedCallback = {
                             val payload = Unpooled.buffer()
                             payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
@@ -70,7 +70,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                 )
             }
         } else {
-            logger.warn { "id: ${originCTX.channel().id().asShortText()}, drop trojan package, no password matched" }
+            logger.warn { "id: ${originCTX.channel().id().asShortText()}, drop trojan package, password not matched" }
 
         }
     }
