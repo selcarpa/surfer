@@ -24,7 +24,6 @@ fun resolveOutbound(inbound: Inbound, odor: Odor?=null): Optional<Outbound> {
                 return@filter true
             } else if (it.pattern.matcher("${odor.host}:${odor.port}").matches()) {
                 return@filter true
-
             }
         }
         return@filter false
@@ -32,7 +31,7 @@ fun resolveOutbound(inbound: Inbound, odor: Odor?=null): Optional<Outbound> {
 
     if (matchingRule.isPresent) {
         val matchingOutbound = Configuration.outbounds.stream()
-            .filter { outbound -> matchingRule.get().tag == outbound.tag }.findFirst()
+            .filter { outbound -> matchingRule.get().outboundTag == outbound.tag }.findFirst()
         if (matchingOutbound.isPresent) {
             return matchingOutbound
         }

@@ -1,12 +1,13 @@
 plugins {
     kotlin("jvm") version "1.8.0"
+    kotlin("plugin.serialization") version "1.8.21"
     application
     id("com.github.johnrengelman.shadow") version "7.1.2"
     idea
 }
 
 group = "one.tain"
-version = "1.7-SNAPSHOT"
+version = "1.8-SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -14,12 +15,14 @@ repositories {
 
 dependencies {
     implementation("io.netty:netty-all:4.1.93.Final")
-    implementation("com.google.code.gson:gson:2.10.1")
+//    implementation("com.google.code.gson:gson:2.10.1")
 //    implementation("io.jpower.kcp:kcp-netty:1.5.0")
 
     //kotlin-logging
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
     implementation("ch.qos.logback:logback-classic:1.4.7")
+
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.5.1")
 
     testImplementation(kotlin("test"))
 }

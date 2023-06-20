@@ -1,10 +1,13 @@
 package model.config
 
-import com.google.gson.Gson
+import kotlinx.serialization.ExperimentalSerializationApi
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.regex.Pattern
 import java.util.stream.Collectors
 private var rulesOrdered=false
+@Serializable
 data class ConfigurationSettings(
     val inbounds: List<Inbound>, val outbounds: List<Outbound>
 ) {
@@ -27,33 +30,52 @@ data class ConfigurationSettings(
         var ConfigurationUrl: String? = null
         val Configuration: ConfigurationSettings by lazy { initConfiguration() }
 
+        @OptIn(ExperimentalSerializationApi::class)
+        private val json = Json {
+            isLenient = true
+            ignoreUnknownKeys=true
+            explicitNulls=false
+        }
+
         private fun initConfiguration(): ConfigurationSettings {
-            val gson = Gson()
             return if (ConfigurationUrl.orEmpty().isEmpty()) {
                 val content = this::class.java.getResource("/config.json5")?.readText()
-                // read all string
-                gson.fromJson(content, ConfigurationSettings::class.java)
+                json.decodeFromString<ConfigurationSettings>(content!!)
             } else {
                 val content = File(ConfigurationUrl!!).readText()
-                gson.fromJson(content, ConfigurationSettings::class.java)
+                json.decodeFromString<ConfigurationSettings>(content)
             }
         }
     }
 }
+@Serializable
 data class Inbound(val port: Int, val protocol: String, val inboundStreamBy: InboundStreamBy?, val socks5Setting: Socks5Setting?, val trojanSetting: TrojanSetting?, val tag:String?)
+@Serializable
 data class Socks5Setting(val auth: Auth?)
+@Serializable
 data class Auth(val password: String, val username: String)
+@Serializable
 data class Outbound(val protocol: String, val trojanSetting: TrojanSetting?, val outboundStreamBy: OutboundStreamBy?, val tag:String?)
+@Serializable
 data class OutboundStreamBy(val type: String, val wsOutboundSetting: WsOutboundSetting?,val sock5OutboundSetting: Sock5OutboundSetting?,val httpOutboundSetting: HttpOutboundSetting?,val tcpOutboundSetting:TcpOutboundSetting?)
+@Serializable
 data class Sock5OutboundSetting(val auth: Auth?,val port:Int,val host:String)
+@Serializable
 data class HttpOutboundSetting(val auth: Auth?,val port:Int,val host:String)
+@Serializable
 data class TcpOutboundSetting(val port: Int, val host: String)
+@Serializable
 data class InboundStreamBy(val type: String, val wsInboundSetting: WsInboundSetting)
+@Serializable
 data class WsOutboundSetting(val path: String, val port: Int, val host: String)
+@Serializable
 data class WsInboundSetting(val path: String)
+@Serializable
 data class TrojanSetting(val password: String)
+@Serializable
 data class LogConfiguration(var level: String = "info", var pattern: String = "%date{ISO8601} %highlight(%level) [%t] %cyan(%logger{16}) %M: %msg%n", var maxHistory: Int = 7, var fileName: String = "", var path: String = "./logs/")
-data class Rule(val type: String, val tag: String?, val protocol: String?, val order: Int, val destPattern: String?) {
+@Serializable
+data class Rule(val type: String, val tag: String?, val protocol: String?, val order: Int, val destPattern: String?,val outboundTag:String) {
     val pattern: Pattern by lazy { loadPattern() }
     private fun loadPattern(): Pattern {
         if (destPattern == null) {
