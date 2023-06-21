@@ -1,0 +1,28 @@
+{
+  "inbounds": [
+    {
+      port: 14270,
+      protocol: "socks5"
+    },
+    {
+      port: 14272,
+      protocol: "http"
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "trojan",
+      "outboundStreamBy": {
+        "type": "wss",
+        "wsOutboundSetting": {
+          "port": 443,
+          "host": "example.org",
+          "path": "/surfer"
+        }
+      },
+      "trojanSetting": {
+        "password": ""//any String same as trojanIn.json5
+      }
+    }
+  ]
+}

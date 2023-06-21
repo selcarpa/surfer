@@ -10,6 +10,7 @@ import io.netty.handler.codec.socksx.SocksVersion
 import io.netty.handler.codec.socksx.v5.*
 import model.config.Inbound
 import model.protocol.Odor
+import model.protocol.Protocol
 import mu.KotlinLogging
 import rule.resolveOutbound
 import stream.RelayAndOutboundOp
@@ -112,13 +113,13 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
 }
 
 @Sharable
-class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage?>() {
+class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
 
     companion object {
         private val logger = KotlinLogging.logger {}
     }
 
-    public override fun channelRead0(originCTX: ChannelHandlerContext, message: SocksMessage?) {
+    public override fun channelRead0(originCTX: ChannelHandlerContext, message: SocksMessage) {
         when (message) {
             is Socks5CommandRequest -> socks5Command(originCTX, message)
             else -> {
@@ -139,7 +140,15 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
             message.type()
         )
         resolveOutbound.ifPresent { outbound ->
-            val odor = Odor(message.dstAddr(), message.dstPort())
+            val odor = Odor(
+                host = message.dstAddr(),
+                port = message.dstPort(),
+                desProtocol = if (message.type() == Socks5CommandType.UDP_ASSOCIATE) {
+                    Protocol.UDP
+                } else {
+                    Protocol.TCP
+                }
+            )
             relayAndOutbound(
                 RelayAndOutboundOp(
                     originCTX = originCTX,

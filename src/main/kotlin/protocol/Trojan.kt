@@ -14,6 +14,7 @@ import model.config.Inbound
 import model.config.Outbound
 import model.config.TrojanSetting
 import model.protocol.Odor
+import model.protocol.Protocol
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
@@ -23,6 +24,7 @@ import stream.RelayInboundHandler
 import stream.relayAndOutbound
 import utils.ChannelUtils
 import utils.Sha224Utils
+import utils.SurferUtils
 
 class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<ByteBuf>() {
     companion object {
@@ -39,7 +41,9 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
         }
 
         if (ByteBufUtil.hexDump(
-                Sha224Utils.encryptAndHex(inbound.trojanSetting!!.password).toByteArray()
+                Sha224Utils.encryptAndHex(
+                    SurferUtils.toUUid(inbound.trojanSetting!!.password).toString()
+                ).toByteArray()
             ) == trojanPackage.hexSha224Password
         ) {
             logger.info(
@@ -48,7 +52,16 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                 }], addr: ${trojanPackage.request.host}:${trojanPackage.request.port}"
             )
             resolveOutbound(inbound).ifPresent { outbound ->
-                val odor = Odor(trojanPackage.request.host, trojanPackage.request.port)
+                val odor = Odor(
+                    host = trojanPackage.request.host,
+                    port = trojanPackage.request.port,
+                    originProtocol = Protocol.TROJAN,
+                    desProtocol = if (Socks5CommandType.valueOf(trojanPackage.request.atyp) == Socks5CommandType.CONNECT) {
+                        Protocol.TCP
+                    } else {
+                        Protocol.UDP
+                    }
+                )
                 relayAndOutbound(
                     RelayAndOutboundOp(
                         originCTX = originCTX,
@@ -136,6 +149,8 @@ class TrojanRelayInboundHandler(
  */
 fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequest: TrojanRequest): TrojanPackage {
     return TrojanPackage(
-        Sha224Utils.encryptAndHex(trojanSetting.password), trojanRequest, ByteBufUtil.hexDump(msg)
+        Sha224Utils.encryptAndHex(SurferUtils.toUUid(trojanSetting.password).toString()),
+        trojanRequest,
+        ByteBufUtil.hexDump(msg)
     )
 }

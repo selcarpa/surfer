@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "one.tain"
-version = "1.8-SNAPSHOT"
+version = "1.9-SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -15,7 +15,6 @@ repositories {
 
 dependencies {
     implementation("io.netty:netty-all:4.1.93.Final")
-//    implementation("com.google.code.gson:gson:2.10.1")
 //    implementation("io.jpower.kcp:kcp-netty:1.5.0")
 
     //kotlin-logging

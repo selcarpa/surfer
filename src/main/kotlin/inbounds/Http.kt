@@ -96,7 +96,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
             else -> uri.port
         }
         resolveOutbound.ifPresent { outbound ->
-            val odor = Odor(uri.host, port)
+            val odor = Odor(host = uri.host, port = port, originProtocol = Protocol.HTTP, desProtocol = Protocol.TCP)
             relayAndOutbound(
                 RelayAndOutboundOp(
                     originCTX = originCTX,

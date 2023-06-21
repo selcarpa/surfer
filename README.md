@@ -170,3 +170,9 @@ java -jar surfer.jar -c=config.json
   destPattern: "",
 }
 ```
+## future plan
+
+- fullcone, stun support
+- socks5 udp support
+- reverse proxy support
+- kcp support
