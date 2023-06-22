@@ -65,7 +65,9 @@ data class HttpOutboundSetting(val auth: Auth?,val port:Int,val host:String)
 @Serializable
 data class TcpOutboundSetting(val port: Int, val host: String)
 @Serializable
-data class InboundStreamBy(val type: String, val wsInboundSetting: WsInboundSetting)
+data class InboundStreamBy(val type: String, val wsInboundSetting: WsInboundSetting?,val tlsInboundSetting: TlsInboundSetting? )
+@Serializable
+data class TlsInboundSetting(val keyCertChainFile:String, val keyFile:String, val password: String?)
 @Serializable
 data class WsOutboundSetting(val path: String, val port: Int, val host: String)
 @Serializable

@@ -20,7 +20,6 @@ import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.proxy.HttpProxyHandler
 import io.netty.handler.proxy.ProxyConnectionEvent
 import io.netty.handler.proxy.Socks5ProxyHandler
-import io.netty.handler.ssl.SslCompletionEvent
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
@@ -189,9 +188,8 @@ private fun tlsStream(
     connect(
         eventLoopGroup, {
             mutableListOf(
-                HandlerPair(SslActiveHandler(promise)),
-                HandlerPair(sslCtx.newHandler(it.alloc(), tcpOutboundSetting.host, tcpOutboundSetting.port))
-
+                HandlerPair(sslCtx.newHandler(it.alloc(), tcpOutboundSetting.host, tcpOutboundSetting.port)),
+                HandlerPair(ChannelActiveHandler(promise)),
             )
         }, odor
     )
@@ -419,20 +417,6 @@ class ChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuple
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
         if (evt is ProxyConnectionEvent) {
             logger.trace { "ProxyConnectionEvent: $evt" }
-        }
-        ctx.fireUserEventTriggered(evt)
-    }
-}
-
-/**
- * ssl activator for client connected, when ssl handshake complete, we can activate other operation
- */
-class SslActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHandler() {
-    private val logger = KotlinLogging.logger {}
-    override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
-        if (evt is SslCompletionEvent) {
-            logger.trace { "SslCompletionEvent: $evt" }
-            promise.setSuccess(ctx.channel())
         }
         ctx.fireUserEventTriggered(evt)
     }

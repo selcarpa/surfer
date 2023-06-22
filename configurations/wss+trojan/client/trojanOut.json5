@@ -1,11 +1,11 @@
 {
   "inbounds": [
     {
-      port: 14270,
+      port: 14270,//local port
       protocol: "socks5"
     },
     {
-      port: 14272,
+      port: 14272,//local port
       protocol: "http"
     }
   ],
@@ -15,8 +15,8 @@
       "outboundStreamBy": {
         "type": "wss",
         "wsOutboundSetting": {
-          "port": 443,
-          "host": "example.org",
+          "port": 443,//caddy default https port
+          "host": "example.org",//same as caddyfile domain
           "path": "/surfer"
         }
       },
