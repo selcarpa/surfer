@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "one.tain"
-version = "1.9-SNAPSHOT"
+version = "1.10-SNAPSHOT"
 
 repositories {
     mavenCentral()
@@ -15,7 +15,7 @@ repositories {
 
 dependencies {
     implementation("io.netty:netty-all:4.1.93.Final")
-//    implementation("io.jpower.kcp:kcp-netty:1.5.0")
+    implementation("io.jpower.kcp:kcp-netty:1.5.0")
 
     //ssl server support
     implementation("org.bouncycastle:bcpkix-jdk18on:1.75")

@@ -51,17 +51,17 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                     originCTX.channel().id().asShortText()
                 }], addr: ${trojanPackage.request.host}:${trojanPackage.request.port}"
             )
-            resolveOutbound(inbound).ifPresent { outbound ->
-                val odor = Odor(
-                    host = trojanPackage.request.host,
-                    port = trojanPackage.request.port,
-                    originProtocol = Protocol.TROJAN,
-                    desProtocol = if (Socks5CommandType.valueOf(trojanPackage.request.atyp) == Socks5CommandType.CONNECT) {
-                        Protocol.TCP
-                    } else {
-                        Protocol.UDP
-                    }
-                )
+            val odor = Odor(
+                host = trojanPackage.request.host,
+                port = trojanPackage.request.port,
+                originProtocol = Protocol.TROJAN,
+                desProtocol = if (Socks5CommandType.valueOf(trojanPackage.request.cmd) == Socks5CommandType.CONNECT) {
+                    Protocol.TCP
+                } else {
+                    Protocol.UDP
+                }
+            )
+            resolveOutbound(inbound = inbound, odor = odor).ifPresent { outbound ->
                 relayAndOutbound(
                     RelayAndOutboundOp(
                         originCTX = originCTX,
