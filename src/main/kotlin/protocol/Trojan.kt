@@ -10,6 +10,7 @@ import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.handler.codec.DecoderException
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.util.ReferenceCountUtil
+import model.RELAY_HANDLER_NAME
 import model.config.Inbound
 import model.config.Outbound
 import model.config.TrojanSetting
@@ -96,25 +97,24 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
 }
 
 class TrojanRelayInboundHandler(
-    relayChannel: Channel,
+    private val relayChannel: Channel,
     private val trojanSetting: TrojanSetting,
     private val trojanRequest: TrojanRequest,
     inActiveCallBack: () -> Unit = {},
-    private var firstPackage: Boolean = true
 ) : RelayInboundHandler(relayChannel, inActiveCallBack) {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
 
     constructor(
-        outboundChannel: Channel, outbound: Outbound, odor: Odor, firstPackage: Boolean = false
+        outboundChannel: Channel, outbound: Outbound, odor: Odor
     ) : this(
         outboundChannel, outbound.trojanSetting!!, TrojanRequest(
             Socks5CommandType.CONNECT.byteValue(),
             odor.addressType().byteValue(),
             odor.host,
             odor.port
-        ), firstPackage = firstPackage
+        )
     )
 
     /**
@@ -122,23 +122,21 @@ class TrojanRelayInboundHandler(
      */
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        if (firstPackage) {
-            when (msg) {
-                is ByteBuf -> {
-                    val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
-                    ReferenceCountUtil.release(msg)
-                    val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
-                    super.channelRead(ctx, trojanByteBuf)
-                    firstPackage = false
-                }
+        when (msg) {
+            is ByteBuf -> {
+                val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
+                ReferenceCountUtil.release(msg)
+                val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
+                super.channelRead(ctx, trojanByteBuf)
 
-                else -> {
-                    logger.error("TrojanRelayHandler receive unknown message:${msg.javaClass.name}")
-                    super.channelRead(ctx, msg)
-                }
+                ctx.channel().pipeline().remove(RELAY_HANDLER_NAME)
+                ctx.channel().pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(relayChannel))
             }
-        } else {
-            super.channelRead(ctx, msg)
+
+            else -> {
+                logger.error("TrojanRelayHandler receive unknown message:${msg.javaClass.name}")
+                super.channelRead(ctx, msg)
+            }
         }
     }
 

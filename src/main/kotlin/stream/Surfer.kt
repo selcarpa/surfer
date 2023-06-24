@@ -71,8 +71,7 @@ fun relayAndOutbound(relayAndOutboundOp: RelayAndOutboundOp) {
                     TrojanRelayInboundHandler(
                         it,
                         relayAndOutboundOp.outbound,
-                        relayAndOutboundOp.odor,
-                        firstPackage = true
+                        relayAndOutboundOp.odor
                     )
                 }
             }
