@@ -6,9 +6,7 @@ enum class Protocol(val superProtocol: Protocol?) {
     TLS(TCP),
     HTTP(TCP),
     SOCKS5(TCP),
-    U_KCP(UDP),
-    T_KCP(TCP),
-
+    UKCP(null),
     //websocket
     WS(HTTP),
 

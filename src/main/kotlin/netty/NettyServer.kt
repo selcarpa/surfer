@@ -1,7 +1,11 @@
 package netty
 
 
+import io.jpower.kcp.netty.ChannelOptionHelper
+import io.jpower.kcp.netty.UkcpChannelOption
+import io.jpower.kcp.netty.UkcpServerChannel
 import io.netty.bootstrap.ServerBootstrap
+import io.netty.bootstrap.UkcpServerBootstrap
 import io.netty.channel.EventLoopGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
@@ -24,7 +28,6 @@ object NettyServer {
     private val bossGroup: EventLoopGroup = NioEventLoopGroup()
     private val workerGroup: EventLoopGroup = NioEventLoopGroup()
     private var tcpBind: Boolean = false
-    private var udpBind: Boolean = false
     fun start() {
         //tcp
         val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup)
@@ -35,30 +38,44 @@ object NettyServer {
             it.stream()
                 .filter { inbound -> transmissionAssert(inbound, Protocol.TCP) }
                 .forEach { inbound ->
-                    bind(tcpBootstrap, inbound)
+                    tcpBootstrap.bind(inbound.port).addListener { future ->
+                        if (future.isSuccess) {
+                            logger.info("${inbound.protocol} bind ${inbound.port} success")
+                            Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
+                        } else {
+                            logger.error("bind ${inbound.port} fail, reason:{}", future.cause().message)
+                            exitProcess(1)
+                        }
+                    }
                     tcpBind = true
                 }
         }
         if (!tcpBind) {
             logger.debug { "no tcp inbound" }
         }
-        //udp
-        val udpBootstrap = ServerBootstrap().group(bossGroup, workerGroup)
-            .channel(NioServerSocketChannel::class.java)
-            .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+        //ukcp
+        val ukcpServerBootstrap = UkcpServerBootstrap()
+        ukcpServerBootstrap.group(workerGroup)
+            .channel(UkcpServerChannel::class.java)
             .childHandler(ProxyChannelInitializer())
+        ChannelOptionHelper.nodelay(ukcpServerBootstrap, true, 20, 2, true)
+            .childOption(UkcpChannelOption.UKCP_MTU, 512)
+
         Optional.ofNullable(Configuration.inbounds).ifPresent {
             it.stream()
-                .filter { inbound -> transmissionAssert(inbound, Protocol.UDP) }
+                .filter { inbound -> transmissionAssert(inbound, Protocol.UKCP) }
                 .forEach { inbound ->
-                    bind(udpBootstrap, inbound)
-                    udpBind = true
+                    ukcpServerBootstrap.bind(inbound.port).addListener { future ->
+                        if (future.isSuccess) {
+                            logger.info("${inbound.protocol} bind ${inbound.port} success")
+                            Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
+                        } else {
+                            logger.error("bind ${inbound.port} fail, reason:{}", future.cause().message)
+                            exitProcess(1)
+                        }
+                    }
                 }
         }
-        if (!udpBind) {
-            logger.debug { "no udp inbound" }
-        }
-
     }
 
     private fun transmissionAssert(inbound: Inbound, desProtocol: Protocol): Boolean {
@@ -74,18 +91,6 @@ object NettyServer {
             }
         }
         return false
-    }
-
-    private fun bind(bootstrap: ServerBootstrap, inbound: Inbound) {
-        bootstrap.bind(inbound.port).addListener { future ->
-            if (future.isSuccess) {
-                logger.info("${inbound.protocol} bind ${inbound.port} success")
-                Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
-            } else {
-                logger.error("bind ${inbound.port} fail, reason:{}", future.cause().message)
-                exitProcess(1)
-            }
-        }
     }
 
     /**
