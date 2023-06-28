@@ -1,6 +1,6 @@
 import log.loadLogConfig
 import log.startMemoryStatisticPrint
-import model.config.ConfigurationSettings.Companion.ConfigurationUrl
+import model.config.Config.ConfigurationUrl
 import mu.KotlinLogging
 import netty.NettyServer
 

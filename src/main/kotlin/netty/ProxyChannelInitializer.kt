@@ -17,7 +17,7 @@ import io.netty.handler.stream.ChunkedWriteHandler
 import io.netty.handler.timeout.IdleStateHandler
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
-import model.config.ConfigurationSettings.Companion.Configuration
+import model.config.Config.Configuration
 import model.config.Inbound
 import model.config.TlsInboundSetting
 import model.config.WsInboundSetting

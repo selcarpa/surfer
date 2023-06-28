@@ -1,6 +1,6 @@
 package rule
 
-import model.config.ConfigurationSettings.Companion.Configuration
+import model.config.Config.Configuration
 import model.config.Inbound
 import model.config.Outbound
 import model.config.RuleType

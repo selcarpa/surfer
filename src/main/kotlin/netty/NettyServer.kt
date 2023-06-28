@@ -12,7 +12,7 @@ import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.logging.ByteBufFormat
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
-import model.config.ConfigurationSettings.Companion.Configuration
+import model.config.Config.Configuration
 import model.config.Inbound
 import model.protocol.Protocol
 import mu.KotlinLogging

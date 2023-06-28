@@ -11,7 +11,7 @@ import ch.qos.logback.core.rolling.RollingFileAppender
 import ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy
 import ch.qos.logback.core.util.FileSize
 import model.LogLevel
-import model.config.ConfigurationSettings.Companion.Configuration
+import model.config.Config.Configuration
 import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.charset.StandardCharsets

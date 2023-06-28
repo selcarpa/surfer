@@ -6,48 +6,60 @@ import kotlinx.serialization.json.Json
 import java.io.File
 import java.util.regex.Pattern
 import java.util.stream.Collectors
-private var rulesOrdered=false
+
+private var rulesOrdered = false
+
+@OptIn(ExperimentalSerializationApi::class)
+private val json = Json {
+    isLenient = true
+    ignoreUnknownKeys = true
+    explicitNulls = false
+}
+
+//val toml = Toml {
+//    ignoreUnknownKeys = true
+//}
+object Config {
+    var ConfigurationUrl: String? = null
+    val Configuration: ConfigurationSettings by lazy { initConfiguration() }
+
+    private fun initConfiguration(): ConfigurationSettings {
+        return if (ConfigurationUrl.orEmpty().isEmpty()) {
+            val content = this::class.java.getResource("/config.json5")?.readText()
+            json.decodeFromString<ConfigurationSettings>(content!!)
+        } else {
+            val file = File(ConfigurationUrl!!)
+            val content = file.readText()
+            if (file.name.endsWith("json") || file.name.endsWith("json5")) {
+                json.decodeFromString<ConfigurationSettings>(content)
+            }/* else if (file.name.endsWith("toml")) {
+                toml.decodeFromString<ConfigurationSettings>(content)
+            }*/ else {
+                throw Exception("not support file type")
+            }
+        }
+    }
+}
+
 @Serializable
 data class ConfigurationSettings(
     val inbounds: List<Inbound>, val outbounds: List<Outbound>
 ) {
-
     var rules: List<Rule> = mutableListOf()
         get() {
             if (!rulesOrdered) {
                 field = field.stream()
                     .sorted(Comparator.comparing { RuleType.valueOf(it.type.uppercase()).orderMultiple * it.order })
                     .collect(Collectors.toList())
-                rulesOrdered=true
+                rulesOrdered = true
                 return field
             }
             return field
         }
 
     var log: LogConfiguration = LogConfiguration()
-
-    companion object {
-        var ConfigurationUrl: String? = null
-        val Configuration: ConfigurationSettings by lazy { initConfiguration() }
-
-        @OptIn(ExperimentalSerializationApi::class)
-        private val json = Json {
-            isLenient = true
-            ignoreUnknownKeys=true
-            explicitNulls=false
-        }
-
-        private fun initConfiguration(): ConfigurationSettings {
-            return if (ConfigurationUrl.orEmpty().isEmpty()) {
-                val content = this::class.java.getResource("/config.json5")?.readText()
-                json.decodeFromString<ConfigurationSettings>(content!!)
-            } else {
-                val content = File(ConfigurationUrl!!).readText()
-                json.decodeFromString<ConfigurationSettings>(content)
-            }
-        }
-    }
 }
+
 @Serializable
 data class Inbound(val port: Int, val protocol: String, val inboundStreamBy: InboundStreamBy?, val socks5Setting: Socks5Setting?, val trojanSetting: TrojanSetting?, val tag:String?)
 @Serializable
