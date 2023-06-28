@@ -9,6 +9,7 @@ import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.handler.codec.DecoderException
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
+import io.netty.handler.proxy.ProxyHandler
 import io.netty.util.ReferenceCountUtil
 import model.RELAY_HANDLER_NAME
 import model.config.Inbound
@@ -26,12 +27,14 @@ import stream.relayAndOutbound
 import utils.ChannelUtils
 import utils.Sha224Utils
 import utils.SurferUtils
+import java.net.InetSocketAddress
 
 class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<ByteBuf>() {
     companion object {
         private val logger = KotlinLogging.logger { }
     }
 
+    @Synchronized
     override fun channelRead0(originCTX: ChannelHandlerContext, msg: ByteBuf) {
         //parse trojan package
         val trojanPackage = try {
@@ -151,4 +154,36 @@ fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequ
         trojanRequest,
         ByteBufUtil.hexDump(msg)
     )
+}
+
+class TrojanProxy(socketAddress: InetSocketAddress) : ProxyHandler(socketAddress) {
+    override fun protocol(): String {
+        return "TROJAN"
+    }
+
+    override fun authScheme(): String {
+        return "TROJAN"
+    }
+
+    override fun addCodec(ctx: ChannelHandlerContext) {
+        val p = ctx.pipeline()
+        val name = ctx.name()
+    }
+
+    override fun removeEncoder(ctx: ChannelHandlerContext) {
+        TODO("Not yet implemented")
+    }
+
+    override fun removeDecoder(ctx: ChannelHandlerContext) {
+        TODO("Not yet implemented")
+    }
+
+    override fun newInitialMessage(ctx: ChannelHandlerContext): Any {
+        TODO("Not yet implemented")
+    }
+
+    override fun handleResponse(ctx: ChannelHandlerContext, response: Any): Boolean {
+        TODO("Not yet implemented")
+    }
+
 }
