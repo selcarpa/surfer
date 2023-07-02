@@ -34,15 +34,10 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
         private val logger = KotlinLogging.logger { }
     }
 
-    @Synchronized
+    private var removed = false
     override fun channelRead0(originCTX: ChannelHandlerContext, msg: ByteBuf) {
         //parse trojan package
-        val trojanPackage = try {
-            TrojanPackage.parse(msg)
-        } catch (e: DecoderException) {
-            logger.warn { "parse trojan package failed, ${e.message}" }
-            return
-        }
+        val trojanPackage = TrojanPackage.parse(msg)
 
         if (ByteBufUtil.hexDump(
                 Sha224Utils.encryptAndHex(
@@ -76,8 +71,12 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                             val payload = Unpooled.buffer()
                             payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
                             it.writeAndFlush(payload).addListener {
-                                //Trojan protocol only need package once, then send origin data directly
-                                originCTX.pipeline().remove(this)
+                                //avoid remove this handler twice
+                                if (!removed) {
+                                    //Trojan protocol only need package once, then send origin data directly
+                                    originCTX.pipeline().remove(this)
+                                    removed = true
+                                }
                             }
                         }
                         relayAndOutboundOp.connectFail = {
@@ -94,8 +93,22 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
 
 
     @Suppress("OVERRIDE_DEPRECATION")
-    override fun exceptionCaught(ctx: ChannelHandlerContext?, cause: Throwable?) {
-        logger.error(cause) { "id: ${ctx!!.channel().id().asShortText()}, exception caught" }
+    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+        if (cause is DecoderException || cause.cause is DecoderException) {
+            logger.warn {
+                "[${
+                    ctx.channel().id().asShortText()
+                }] parse trojan package failed, ${cause.message}, give a discard handler"
+            }
+            ctx.pipeline().forEach {
+                ctx.pipeline().remove(it.value)
+            }
+            removed = true
+            ctx.pipeline().addLast(DiscardHandler())
+            return
+        }
+        logger.error(cause) { "[${ctx.channel().id().asShortText()}], exception caught" }
+
     }
 }
 
