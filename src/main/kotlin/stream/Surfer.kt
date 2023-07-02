@@ -117,6 +117,8 @@ fun relayAndOutbound(
                 }
             })
         } else {
+            logger.error(future.cause().message)
+            logger.debug { future.cause().stackTrace }
             connectFail()
         }
     }
@@ -450,28 +452,29 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
                     logger.error(
                         "relay inbound write message:${msg.javaClass.name} to [${
                             relayChannel.id().asShortText()
-                        }] failed, cause: {}", it.cause()
+                        }] failed, cause: ${it.cause().message}", it.cause()
                     )
-                    logger.error(it.cause().message, it.cause())
                 }
             })
         } else {
             logger.warn(
-                "relay channel　[${
+                "[${
                     relayChannel.id().asShortText()
-                }] is not active, close message:${msg.javaClass.name}"
+                }] relay channel is not active, close message:${msg.javaClass.name}"
             )
             ReferenceCountUtil.release(msg)
+            ChannelUtils.closeOnFlush(ctx.channel())
         }
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
         if (relayChannel.isActive) {
-            logger.debug("[{}]  close channel, write close to relay channel", relayChannel.id().asShortText())
+            logger.debug("[{}] close channel, write close to relay channel", relayChannel.id().asShortText())
             relayChannel.pipeline().remove(RELAY_HANDLER_NAME)
             //add a discard handler to discard all message
             relayChannel.pipeline().addLast(DiscardHandler())
             ChannelUtils.closeOnFlush(relayChannel)
+            relayChannel.close()
             inActiveCallBack()
         }
     }
