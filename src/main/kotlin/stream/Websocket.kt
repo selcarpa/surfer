@@ -28,7 +28,7 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>) :
         if (evt is WebSocketClientProtocolHandler.ClientHandshakeStateEvent) {
             if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE) {
                 handleShakePromise.setSuccess(ctx.channel())
-            }else if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_TIMEOUT){
+            } else if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_TIMEOUT) {
                 handleShakePromise.setFailure(Throwable("websocket handshake failed"))
             }
         }

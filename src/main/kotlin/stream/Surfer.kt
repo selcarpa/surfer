@@ -45,7 +45,7 @@ private val logger = KotlinLogging.logger {}
 /**
  * Handle all incoming messages, and relay them to the outbound
  */
-fun union(relayAndOutboundOp: RelayAndOutboundOp,inbound: Inbound, odor: Odor) {
+fun union(relayAndOutboundOp: RelayAndOutboundOp, inbound: Inbound, odor: Odor) {
 //    val outboundOptional = resolveOutbound(inbound, odor)
 //
 //    if (outboundOptional.isPresent) {
@@ -144,7 +144,7 @@ private fun outbound(
         return galaxy(connectListener, odor, eventLoopGroup)
     }
     return when (Protocol.valueOfOrNull(outbound.outboundStreamBy.type)) {
-        Protocol.WSS ->  wssStream(
+        Protocol.WSS -> wssStream(
             connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup, odor
         )
 
@@ -180,8 +180,8 @@ private fun tlsStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.redirectPort=tcpOutboundSetting.port
-    odor.redirectHost=tcpOutboundSetting.host
+    odor.redirectPort = tcpOutboundSetting.port
+    odor.redirectHost = tcpOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
     promise.addListener(connectListener)
     val sslCtx: SslContext =
@@ -202,8 +202,8 @@ private fun tcpStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.redirectPort=tcpOutboundSetting.port
-    odor.redirectHost=tcpOutboundSetting.host
+    odor.redirectPort = tcpOutboundSetting.port
+    odor.redirectHost = tcpOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
     promise.addListener(connectListener)
 
@@ -222,8 +222,8 @@ private fun wssStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.redirectPort=wsOutboundSetting.port
-    odor.redirectHost=wsOutboundSetting.host
+    odor.redirectPort = wsOutboundSetting.port
+    odor.redirectHost = wsOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
     promise.addListener(connectListener)
 
@@ -257,8 +257,8 @@ private fun wsStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.redirectHost=wsOutboundSetting.host
-    odor.redirectPort=wsOutboundSetting.port
+    odor.redirectHost = wsOutboundSetting.host
+    odor.redirectPort = wsOutboundSetting.port
     val promise = eventLoopGroup.next().newPromise<Channel>()
     promise.addListener(connectListener)
 
@@ -469,11 +469,14 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
         if (relayChannel.isActive) {
-            logger.debug("[{}] close channel, write close to relay channel", relayChannel.id().asShortText())
+            logger.debug(
+                "[{}] closed channel, write close to relay channel [{}]",
+                ctx.channel().id().asShortText(),
+                relayChannel.id().asShortText()
+            )
             relayChannel.pipeline().remove(RELAY_HANDLER_NAME)
             //add a discard handler to discard all message
             relayChannel.pipeline().addLast(DiscardHandler())
-            ChannelUtils.closeOnFlush(relayChannel)
             relayChannel.close()
             inActiveCallBack()
         }
