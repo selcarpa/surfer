@@ -3,6 +3,7 @@ package rule
 import model.config.Config.Configuration
 import model.config.Inbound
 import model.config.Outbound
+import model.config.Rule
 import model.config.RuleType
 import model.protocol.Odor
 import model.protocol.Protocol
@@ -12,30 +13,34 @@ import java.util.*
 private val logger = KotlinLogging.logger {}
 
 
-fun resolveOutbound(inbound: Inbound, odor: Odor?=null): Optional<Outbound> {
-
+fun resolveOutbound(inbound: Inbound, odor: Odor): Optional<Outbound> {
     val matchingRule = Configuration.rules.stream().filter {
-        if (RuleType.valueOf(it.type.uppercase()) == RuleType.TAGGED) {
-            if (inbound.tag == it.tag) {
-                return@filter true
-            }
-        } else if (RuleType.valueOf(it.type.uppercase()) == RuleType.SNIFFED && odor != null) {
-            if (it.protocol != null && Protocol.valueOfOrNull(it.protocol) == odor.desProtocol) {
-                return@filter true
-            } else if (it.pattern.matcher("${odor.host}:${odor.port}").matches()) {
-                return@filter true
-            }
-        }
-        return@filter false
+        matched(it, inbound, odor)
     }.findFirst()
 
     if (matchingRule.isPresent) {
         val matchingOutbound = Configuration.outbounds.stream()
             .filter { outbound -> matchingRule.get().outboundTag == outbound.tag }.findFirst()
         if (matchingOutbound.isPresent) {
+            logger.info { "resolve outbound [${odor.fromChannel}] to ${matchingOutbound.get().tag}" }
             return matchingOutbound
         }
     }
-    logger.debug { "no specify outbound match, use first outbound" }
+    logger.info { "no specify outbound match [${odor.fromChannel}], use first outbound" }
     return Configuration.outbounds.stream().filter { true }.findFirst()
+}
+
+private fun matched(it: Rule, inbound: Inbound, odor: Odor): Boolean {
+    if (RuleType.valueOf(it.type.uppercase()) == RuleType.TAGGED) {
+        if (inbound.tag == it.tag) {
+            return true
+        }
+    } else if (RuleType.valueOf(it.type.uppercase()) == RuleType.SNIFFED) {
+        if (it.protocol != null && Protocol.valueOfOrNull(it.protocol) == odor.desProtocol) {
+            return true
+        } else if (it.pattern.matcher("${odor.host}:${odor.port}").matches()) {
+            return true
+        }
+    }
+    return false
 }

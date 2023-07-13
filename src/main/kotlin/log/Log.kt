@@ -1,3 +1,5 @@
+@file:Suppress("SYNTHETIC_SETTER_PROJECTED_OUT", "UNCHECKED_CAST")
+
 package log
 
 import ch.qos.logback.classic.Level

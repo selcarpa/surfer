@@ -132,7 +132,17 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
      * socks5 command
      */
     private fun socks5Command(originCTX: ChannelHandlerContext, message: Socks5CommandRequest) {
-        val resolveOutbound = resolveOutbound(inbound)
+        val odor = Odor(
+            host = message.dstAddr(),
+            port = message.dstPort(),
+            desProtocol = if (message.type() == Socks5CommandType.UDP_ASSOCIATE) {
+                Protocol.UDP
+            } else {
+                Protocol.TCP
+            },
+            fromChannel = originCTX.channel().id().asShortText()
+        )
+        val resolveOutbound = resolveOutbound(inbound, odor)
         logger.info(
             "socks5 inbound: [{}], uri: {}, command: {}",
             originCTX.channel().id().asShortText(),
@@ -140,15 +150,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
             message.type()
         )
         resolveOutbound.ifPresent { outbound ->
-            val odor = Odor(
-                host = message.dstAddr(),
-                port = message.dstPort(),
-                desProtocol = if (message.type() == Socks5CommandType.UDP_ASSOCIATE) {
-                    Protocol.UDP
-                } else {
-                    Protocol.TCP
-                }
-            )
+
             relayAndOutbound(
                 RelayAndOutboundOp(
                     originCTX = originCTX,

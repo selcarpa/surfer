@@ -24,6 +24,7 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.handler.timeout.IdleStateHandler
+import io.netty.resolver.NoopAddressResolverGroup
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
@@ -387,6 +388,7 @@ private fun connectTcp(
     socketAddress: InetSocketAddress
 ) {
     Bootstrap().group(eventLoopGroup)
+        .resolver(NoopAddressResolverGroup.INSTANCE)
         .channel(NioSocketChannel::class.java)
         .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
         .handler(channelInitializer)

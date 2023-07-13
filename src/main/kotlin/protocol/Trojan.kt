@@ -58,7 +58,8 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                     Protocol.TCP
                 } else {
                     Protocol.UDP
-                }
+                },
+                fromChannel = originCTX.channel().id().asShortText()
             )
             resolveOutbound(inbound = inbound, odor = odor).ifPresent { outbound ->
                 relayAndOutbound(

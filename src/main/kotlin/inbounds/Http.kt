@@ -3,7 +3,7 @@ package inbounds
 
 import io.netty.buffer.ByteBuf
 import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInboundHandlerAdapter
+import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.*
 import model.config.Inbound
@@ -16,27 +16,28 @@ import stream.relayAndOutbound
 import java.net.URI
 
 
-class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandlerAdapter() {
+class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<HttpRequest>() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
 
-    override fun channelRead(originCTX: ChannelHandlerContext, msg: Any) {
+    override fun channelInactive(ctx: ChannelHandlerContext) {
+        logger.warn { "[${ctx.channel().id().asShortText()}] channel inactive"}
+        super.channelInactive(ctx)
+    }
+
+    override fun channelRead0(originCTX: ChannelHandlerContext, msg: HttpRequest) {
         //http proxy and http connect method
-        if (msg is HttpRequest) {
-            logger.info(
-                "http inbound: [{}], method: {}, uri: {}",
-                originCTX.channel().id().asShortText(),
-                msg.method(),
-                msg.uri()
-            )
-            if (msg.method() == HttpMethod.CONNECT) {
-                tunnelProxy(originCTX, msg)
-            } else {
-                httpProxy(originCTX, msg)
-            }
+        logger.info(
+            "http inbound: [{}], method: {}, uri: {}",
+            originCTX.channel().id().asShortText(),
+            msg.method(),
+            msg.uri()
+        )
+        if (msg.method() == HttpMethod.CONNECT) {
+            tunnelProxy(originCTX, msg)
         } else {
-            //other message
+            httpProxy(originCTX, msg)
         }
     }
 
@@ -47,12 +48,18 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
             -1 -> 80
             else -> uri.port
         }
-        val odor = Odor(host = uri.host, port = port, originProtocol = Protocol.HTTP, desProtocol = Protocol.HTTP)
+        val odor = Odor(
+            host = uri.host,
+            port = port,
+            originProtocol = Protocol.HTTP,
+            desProtocol = Protocol.HTTP,
+            fromChannel = originCTX.channel().id().asShortText()
+        )
         val ch = EmbeddedChannel(HttpRequestEncoder())
         ch.writeOutbound(request)
         val encoded = ch.readOutbound<ByteBuf>()
         ch.close()
-        val resolveOutbound = resolveOutbound(inbound,odor)
+        val resolveOutbound = resolveOutbound(inbound, odor)
 
         logger.trace("http proxy outbound from {}, content: {}", originCTX.channel().id().asShortText(), request)
         resolveOutbound.ifPresent { outbound ->
@@ -89,20 +96,26 @@ class HttpProxyServerHandler(private val inbound: Inbound) : ChannelInboundHandl
                 "https://${request.uri()}"
             }
         )
-        val resolveOutbound = resolveOutbound(inbound)
-
         val port = when (uri.port) {
             -1 -> 443
             else -> uri.port
         }
+        val odor = Odor(
+            host = uri.host,
+            port = port,
+            originProtocol = Protocol.HTTP,
+            desProtocol = Protocol.TCP,
+            fromChannel = originCTX.channel().id().asShortText()
+        )
+
+        val resolveOutbound = resolveOutbound(inbound,odor)
         resolveOutbound.ifPresent { outbound ->
-            val odor = Odor(host = uri.host, port = port, originProtocol = Protocol.HTTP, desProtocol = Protocol.TCP)
             relayAndOutbound(
                 RelayAndOutboundOp(
                     originCTX = originCTX,
                     outbound = outbound,
                     odor = odor
-                ).also {relayAndOutboundOp ->
+                ).also { relayAndOutboundOp ->
                     relayAndOutboundOp.connectEstablishedCallback = {
                         //write Connection Established
                         originCTX.writeAndFlush(
