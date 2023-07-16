@@ -48,7 +48,11 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
             logger.info(
                 "trojan inbound: [${
                     originCTX.channel().id().asShortText()
-                }], addr: ${trojanPackage.request.host}:${trojanPackage.request.port}"
+                }], addr: ${trojanPackage.request.host}:${trojanPackage.request.port}, cmd: ${
+                    Socks5CommandType.valueOf(
+                        trojanPackage.request.cmd
+                    )
+                }"
             )
             val odor = Odor(
                 host = trojanPackage.request.host,

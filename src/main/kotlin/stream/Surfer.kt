@@ -4,7 +4,9 @@ package stream
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
+import io.netty.channel.nio.AbstractNioByteChannel
 import io.netty.channel.nio.NioEventLoopGroup
+import io.netty.channel.socket.DatagramPacket
 import io.netty.channel.socket.nio.NioDatagramChannel
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.DefaultHttpHeaders
@@ -181,6 +183,7 @@ private fun tlsStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
+    odor.notDns=true
     odor.redirectPort = tcpOutboundSetting.port
     odor.redirectHost = tcpOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
@@ -203,6 +206,7 @@ private fun tcpStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
+    odor.notDns=true
     odor.redirectPort = tcpOutboundSetting.port
     odor.redirectHost = tcpOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
@@ -223,6 +227,7 @@ private fun wssStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
+    odor.notDns=true
     odor.redirectPort = wsOutboundSetting.port
     odor.redirectHost = wsOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
@@ -258,6 +263,7 @@ private fun wsStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
+    odor.notDns=true
     odor.redirectHost = wsOutboundSetting.host
     odor.redirectPort = wsOutboundSetting.port
     val promise = eventLoopGroup.next().newPromise<Channel>()
@@ -299,8 +305,9 @@ private fun httpStream(
     connectListener: FutureListener<Channel>,
     httpOutboundSetting: HttpOutboundSetting,
     eventLoopGroup: EventLoopGroup,
-    socketAddress: Odor
+    odor: Odor
 ) {
+    odor.notDns=true
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     val proxyHandler = if (httpOutboundSetting.auth == null) {
         HttpProxyHandler(
@@ -320,7 +327,7 @@ private fun httpStream(
             HandlerPair(proxyHandler, PROXY_HANDLER_NAME),
             HandlerPair(ChannelActiveHandler(promise))
         )
-    }, socketAddress)
+    }, odor)
 }
 
 private fun socks5Stream(
@@ -329,6 +336,7 @@ private fun socks5Stream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
+    odor.notDns=true
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     val proxyHandler = if (socks5OutboundSetting.auth == null) {
         Socks5ProxyHandler(
@@ -358,9 +366,9 @@ private fun connect(
 ) {
     val protocol = odor.desProtocol.topProtocol()
     if (protocol == Protocol.TCP) {
-        connectTcp(eventLoopGroup, SurferInitializer(handlerPairs), odor.socketAddress())
+        connectTcp(eventLoopGroup, SurferInitializer(handlerPairs), odor.socketAddress(), odor.notDns)
     } else if (protocol == Protocol.UDP) {
-        connectUdp(eventLoopGroup, SurferInitializer(handlerPairs), odor.socketAddress())
+        connectUdp(eventLoopGroup, SurferInitializer(handlerPairs), odor.socketAddress(), odor.notDns)
     }
 
 }
@@ -385,10 +393,15 @@ class SurferInitializer(private val handlerPairs: (Channel) -> MutableList<Handl
 private fun connectTcp(
     eventLoopGroup: EventLoopGroup,
     channelInitializer: ChannelInitializer<Channel>,
-    socketAddress: InetSocketAddress
+    socketAddress: InetSocketAddress,
+    notDns: Boolean = false
 ) {
     Bootstrap().group(eventLoopGroup)
-        .resolver(NoopAddressResolverGroup.INSTANCE)
+        .also {
+            if (!notDns) {
+                it.resolver(NoopAddressResolverGroup.INSTANCE)
+            }
+        }
         .channel(NioSocketChannel::class.java)
         .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
         .handler(channelInitializer)
@@ -398,9 +411,15 @@ private fun connectTcp(
 private fun connectUdp(
     eventLoopGroup: EventLoopGroup,
     channelInitializer: ChannelInitializer<Channel>,
-    socketAddress: InetSocketAddress
+    socketAddress: InetSocketAddress,
+    notDns: Boolean = false
 ) {
     Bootstrap().group(eventLoopGroup)
+        .also {
+            if (!notDns) {
+                it.resolver(NoopAddressResolverGroup.INSTANCE)
+            }
+        }
         .channel(NioDatagramChannel::class.java)
         .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
         .handler(channelInitializer)
@@ -441,6 +460,28 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (relayChannel.isActive) {
+
+            if (msg is DatagramPacket && relayChannel is AbstractNioByteChannel) {
+                logger.trace(
+                    "relay inbound read from [{}] pipeline handlers:{}, to [{}] pipeline handlers:{}, write message:{}",
+                    ctx.channel().id().asShortText(),
+                    ctx.channel().pipeline().names(),
+                    relayChannel.id().asShortText(),
+                    relayChannel.pipeline().names(),
+                    msg.javaClass.name
+                )
+                relayChannel.writeAndFlush(msg.content()).addListener(ChannelFutureListener {
+                    if (!it.isSuccess) {
+                        logger.error(
+                            "relay inbound write message:${msg.javaClass.name} to [${
+                                relayChannel.id().asShortText()
+                            }] failed, cause: ${it.cause().message}", it.cause()
+                        )
+                    }
+                })
+                return
+            }
+
             logger.trace(
                 "relay inbound read from [{}] pipeline handlers:{}, to [{}] pipeline handlers:{}, write message:{}",
                 ctx.channel().id().asShortText(),

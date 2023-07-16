@@ -10,7 +10,9 @@ data class Odor(
     var originProtocol: Protocol = Protocol.TCP,
     var redirectHost: String? = null,
     var redirectPort: Int? = null,
-    val fromChannel: String
+    val fromChannel: String,
+    var notDns: Boolean = false,
+    var transmissionTrans: Boolean = false,
 ) {
     fun socketAddress(): InetSocketAddress = InetSocketAddress(
         if (redirectHost != null) {
