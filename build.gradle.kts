@@ -14,8 +14,10 @@ repositories {
 }
 
 dependencies {
-    implementation("io.netty:netty-all:4.1.94.Final")
-    implementation("io.jpower.kcp:kcp-netty:1.5.0")
+    implementation("io.netty:netty5-all:5.0.0.Alpha5")
+    implementation("io.netty.contrib:netty-handler-proxy:5.0.0.Alpha2")
+    implementation("io.netty.contrib:netty-codec-socks:5.0.0.Alpha2")
+//    implementation("io.jpower.kcp:kcp-netty:1.5.0")
 
     //ssl server support
     implementation("org.bouncycastle:bcpkix-jdk18on:1.75")

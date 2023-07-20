@@ -3,20 +3,19 @@ package netty
 
 import inbounds.HttpProxyServerHandler
 import inbounds.SocksServerHandler
-import io.netty.channel.Channel
-import io.netty.channel.ChannelInitializer
-import io.netty.channel.socket.nio.NioSocketChannel
-import io.netty.handler.codec.http.HttpContentCompressor
-import io.netty.handler.codec.http.HttpObjectAggregator
-import io.netty.handler.codec.http.HttpServerCodec
-import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler
-import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
-import io.netty.handler.ssl.SslContext
-import io.netty.handler.ssl.SslContextBuilder
-import io.netty.handler.stream.ChunkedWriteHandler
-import io.netty.handler.timeout.IdleStateHandler
-import io.netty.util.concurrent.FutureListener
-import io.netty.util.concurrent.Promise
+import io.netty.contrib.handler.codec.socksx.SocksPortUnificationServerHandler
+import io.netty5.channel.Channel
+import io.netty5.channel.ChannelInitializer
+import io.netty5.channel.socket.nio.NioSocketChannel
+import io.netty5.handler.codec.http.HttpContentCompressor
+import io.netty5.handler.codec.http.HttpObjectAggregator
+import io.netty5.handler.codec.http.HttpServerCodec
+import io.netty5.handler.codec.http.websocketx.WebSocketServerProtocolHandler
+import io.netty5.handler.ssl.SslContext
+import io.netty5.handler.ssl.SslContextBuilder
+import io.netty5.handler.stream.ChunkedWriteHandler
+import io.netty5.handler.timeout.IdleStateHandler
+import io.netty5.util.concurrent.Promise
 import model.config.Config.Configuration
 import model.config.Inbound
 import model.config.TlsInboundSetting
@@ -27,6 +26,7 @@ import protocol.TrojanInboundHandler
 import stream.SslActiveHandler
 import stream.WebsocketDuplexHandler
 import java.io.File
+import java.net.InetSocketAddress
 import java.util.function.Function
 import java.util.stream.Collectors
 
@@ -42,7 +42,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
         val portInboundMap =
             Configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
-        val inbound = portInboundMap[localAddress.port]
+        val inbound = portInboundMap[(localAddress as InetSocketAddress).port]
         //todo: set idle timeout, and close channel
         ch.pipeline().addFirst(IdleStateHandler(300, 300, 300))
         ch.pipeline().addFirst(IdleCloseHandler())
@@ -93,22 +93,22 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
     private fun initTrojanInbound(ch: NioSocketChannel, inbound: Inbound) {
         when (Protocol.valueOfOrNull(inbound.inboundStreamBy!!.type)) {
             Protocol.WS -> {
-                val handleShakePromise = ch.eventLoop().next().newPromise<Channel>()
-                handleShakePromise.addListener(FutureListener { future ->
+                val handleShakePromise = ch.executor().next().newPromise<Channel>()
+                handleShakePromise.asFuture().addListener { future ->
                     if (future.isSuccess) {
-                        future.get().pipeline().addLast(TrojanInboundHandler(inbound))
+                        future.now.pipeline().addLast(TrojanInboundHandler(inbound))
                     }
-                })
+                }
 
                 initWebsocketInbound(ch, inbound.inboundStreamBy.wsInboundSetting!!, handleShakePromise)
             }
             Protocol.TLS->{
-                val handleShakePromise = ch.eventLoop().next().newPromise<Channel>()
-                handleShakePromise.addListener(FutureListener { future ->
+                val handleShakePromise = ch.executor().next().newPromise<Channel>()
+                handleShakePromise.asFuture().addListener { future ->
                     if (future.isSuccess) {
-                        future.get().pipeline().addLast(TrojanInboundHandler(inbound))
+                        future.now.pipeline().addLast(TrojanInboundHandler(inbound))
                     }
-                })
+                }
 
                 initTlsInbound(ch, inbound.inboundStreamBy.tlsInboundSetting!!, handleShakePromise)
             }
@@ -136,7 +136,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
             SslContextBuilder.forServer(File(tlsInboundSetting.keyCertChainFile), File(tlsInboundSetting.keyFile)).build()
         }
         ch.pipeline().addLast(
-            sslCtx.newHandler(ch.alloc()),
+            sslCtx.newHandler(ch.bufferAllocator()),
             SslActiveHandler(handleShakePromise)
         )
     }

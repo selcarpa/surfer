@@ -1,13 +1,11 @@
 package inbounds
 
 
-import io.netty.channel.ChannelFutureListener
-import io.netty.channel.ChannelHandler.Sharable
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.SimpleChannelInboundHandler
-import io.netty.handler.codec.socksx.SocksMessage
-import io.netty.handler.codec.socksx.SocksVersion
-import io.netty.handler.codec.socksx.v5.*
+import io.netty.contrib.handler.codec.socks.SocksMessage
+import io.netty.contrib.handler.codec.socks.SocksProtocolVersion
+import io.netty.contrib.handler.codec.socksx.v5.*
+import io.netty5.channel.ChannelHandlerContext
+import io.netty5.channel.SimpleChannelInboundHandler
 import model.config.Inbound
 import model.protocol.Odor
 import model.protocol.Protocol
@@ -17,7 +15,6 @@ import stream.RelayAndOutboundOp
 import stream.relayAndOutbound
 import utils.ChannelUtils
 
-@Sharable
 class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
     companion object {
         private val logger = KotlinLogging.logger {}
@@ -25,9 +22,9 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
 
     private var authed = false
 
-    public override fun channelRead0(ctx: ChannelHandlerContext, socksRequest: SocksMessage) {
-        when (socksRequest.version()!!) {
-            SocksVersion.SOCKS5 -> socks5Connect(ctx, socksRequest)
+    public override fun messageReceived(ctx: ChannelHandlerContext, socksRequest: SocksMessage) {
+        when (socksRequest.protocolVersion()!!) {
+            SocksProtocolVersion.SOCKS5 -> socks5Connect(ctx, socksRequest)
             else -> {
                 ctx.close()
             }
@@ -55,7 +52,7 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
                 if (inbound.socks5Setting?.auth != null || !authed) {
                     ctx.close()
                 }
-                if (socksRequest.type() === Socks5CommandType.CONNECT) {
+                if ((socksRequest as Socks5CommandRequest).type() === Socks5CommandType.CONNECT) {
                     ctx.pipeline().addLast(SocksServerConnectHandler(inbound))
                     ctx.pipeline().remove(this)
                     ctx.fireChannelRead(socksRequest)
@@ -105,21 +102,19 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
         ctx.flush()
     }
 
-    @Suppress("OVERRIDE_DEPRECATION")
-    override fun exceptionCaught(ctx: ChannelHandlerContext, throwable: Throwable) {
+    override fun channelExceptionCaught(ctx: ChannelHandlerContext, throwable: Throwable) {
         logger.error(throwable.message, throwable)
         ChannelUtils.closeOnFlush(ctx.channel())
     }
 }
 
-@Sharable
 class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
 
     companion object {
         private val logger = KotlinLogging.logger {}
     }
 
-    public override fun channelRead0(originCTX: ChannelHandlerContext, message: SocksMessage) {
+    public override fun messageReceived(originCTX: ChannelHandlerContext, message: SocksMessage) {
         when (message) {
             is Socks5CommandRequest -> socks5Command(originCTX, message)
             else -> {
@@ -165,9 +160,9 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
                                 message.dstAddr(),
                                 message.dstPort()
                             )
-                        ).addListener(ChannelFutureListener {
+                        ).addListener {
                             originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                        })
+                        }
                     }
                     relayAndOutboundOp.connectFail = {
                         originCTX.close()
@@ -178,8 +173,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
 
     }
 
-    @Suppress("OVERRIDE_DEPRECATION")
-    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+    override fun channelExceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         logger.error(cause.message, cause)
         ChannelUtils.closeOnFlush(ctx.channel())
     }

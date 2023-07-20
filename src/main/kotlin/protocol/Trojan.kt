@@ -1,16 +1,15 @@
 package protocol
 
 
-import io.netty.buffer.ByteBuf
-import io.netty.buffer.ByteBufUtil
-import io.netty.buffer.Unpooled
-import io.netty.channel.Channel
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.SimpleChannelInboundHandler
-import io.netty.handler.codec.DecoderException
-import io.netty.handler.codec.socksx.v5.Socks5CommandType
-import io.netty.handler.proxy.ProxyHandler
-import io.netty.util.ReferenceCountUtil
+import io.netty.contrib.handler.codec.socksx.v5.Socks5CommandType
+import io.netty.contrib.handler.proxy.ProxyHandler
+import io.netty5.buffer.*
+import io.netty5.channel.Channel
+import io.netty5.channel.ChannelHandlerContext
+import io.netty5.channel.SimpleChannelInboundHandler
+import io.netty5.handler.codec.DecoderException
+import io.netty5.util.ReferenceCountUtil
+import io.netty5.util.internal.StringUtil
 import model.RELAY_HANDLER_NAME
 import model.config.Inbound
 import model.config.Outbound
@@ -29,17 +28,17 @@ import utils.Sha224Utils
 import utils.SurferUtils
 import java.net.InetSocketAddress
 
-class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<ByteBuf>() {
+class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<Buffer>() {
     companion object {
         private val logger = KotlinLogging.logger { }
     }
 
     private var removed = false
-    override fun channelRead0(originCTX: ChannelHandlerContext, msg: ByteBuf) {
+    override fun messageReceived(originCTX: ChannelHandlerContext, msg: Buffer) {
         //parse trojan package
         val trojanPackage = TrojanPackage.parse(msg)
 
-        if (ByteBufUtil.hexDump(
+        if (BufferUtil.hexDump(
                 Sha224Utils.encryptAndHex(
                     SurferUtils.toUUid(inbound.trojanSetting!!.password).toString()
                 ).toByteArray()
@@ -73,8 +72,8 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                         odor = odor
                     ).also { relayAndOutboundOp ->
                         relayAndOutboundOp.connectEstablishedCallback = {
-                            val payload = Unpooled.buffer()
-                            payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
+                            val payload = BufferAllocator.offHeapUnpooled().allocate(1)
+                            payload.writeBytes(StringUtil.decodeHexDump(trojanPackage.payload))
                             it.writeAndFlush(payload).addListener {
                                 //avoid remove this handler twice
                                 if (!removed) {
@@ -97,8 +96,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
     }
 
 
-    @Suppress("OVERRIDE_DEPRECATION")
-    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+    override fun channelExceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         if (cause is DecoderException || cause.cause is DecoderException) {
             logger.warn {
                 "[${
@@ -144,7 +142,7 @@ class TrojanRelayInboundHandler(
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         when (msg) {
-            is ByteBuf -> {
+            is Buffer -> {
                 val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
                 ReferenceCountUtil.release(msg)
                 val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
@@ -166,11 +164,11 @@ class TrojanRelayInboundHandler(
 /**
  * convert ByteBuf to TrojanPackage
  */
-fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequest: TrojanRequest): TrojanPackage {
+fun byteBuf2TrojanPackage(msg: Buffer, trojanSetting: TrojanSetting, trojanRequest: TrojanRequest): TrojanPackage {
     return TrojanPackage(
         Sha224Utils.encryptAndHex(SurferUtils.toUUid(trojanSetting.password).toString()),
         trojanRequest,
-        ByteBufUtil.hexDump(msg)
+        BufferUtil.hexDump(msg)
     )
 }
 

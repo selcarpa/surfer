@@ -1,35 +1,34 @@
 package stream
 
 
-import io.netty.bootstrap.Bootstrap
-import io.netty.buffer.Unpooled
-import io.netty.channel.*
-import io.netty.channel.nio.AbstractNioByteChannel
-import io.netty.channel.nio.NioEventLoopGroup
-import io.netty.channel.socket.DatagramPacket
-import io.netty.channel.socket.nio.NioDatagramChannel
-import io.netty.channel.socket.nio.NioSocketChannel
-import io.netty.handler.codec.http.DefaultHttpHeaders
-import io.netty.handler.codec.http.HttpClientCodec
-import io.netty.handler.codec.http.HttpObjectAggregator
-import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory
-import io.netty.handler.codec.http.websocketx.WebSocketClientProtocolHandler
-import io.netty.handler.codec.http.websocketx.WebSocketVersion
-import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
-import io.netty.handler.logging.ByteBufFormat
-import io.netty.handler.logging.LogLevel
-import io.netty.handler.logging.LoggingHandler
-import io.netty.handler.proxy.HttpProxyHandler
-import io.netty.handler.proxy.ProxyConnectionEvent
-import io.netty.handler.proxy.Socks5ProxyHandler
-import io.netty.handler.ssl.SslContext
-import io.netty.handler.ssl.SslContextBuilder
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory
-import io.netty.handler.timeout.IdleStateHandler
-import io.netty.resolver.NoopAddressResolverGroup
-import io.netty.util.ReferenceCountUtil
-import io.netty.util.concurrent.FutureListener
-import io.netty.util.concurrent.Promise
+import io.netty.contrib.handler.proxy.HttpProxyHandler
+import io.netty.contrib.handler.proxy.ProxyConnectionEvent
+import io.netty.contrib.handler.proxy.Socks5ProxyHandler
+import io.netty5.bootstrap.Bootstrap
+import io.netty5.channel.*
+import io.netty5.channel.nio.AbstractNioByteChannel
+import io.netty5.channel.socket.DatagramPacket
+import io.netty5.channel.socket.nio.NioDatagramChannel
+import io.netty5.channel.socket.nio.NioSocketChannel
+import io.netty5.handler.codec.http.HttpClientCodec
+import io.netty5.handler.codec.http.HttpObjectAggregator
+import io.netty5.handler.codec.http.headers.HttpHeaders
+import io.netty5.handler.codec.http.websocketx.WebSocketClientHandshakerFactory
+import io.netty5.handler.codec.http.websocketx.WebSocketClientProtocolHandler
+import io.netty5.handler.codec.http.websocketx.WebSocketVersion
+import io.netty5.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
+import io.netty5.handler.logging.BufferFormat
+import io.netty5.handler.logging.LogLevel
+import io.netty5.handler.logging.LoggingHandler
+import io.netty5.handler.ssl.SslContext
+import io.netty5.handler.ssl.SslContextBuilder
+import io.netty5.handler.ssl.util.InsecureTrustManagerFactory
+import io.netty5.handler.timeout.IdleStateHandler
+import io.netty5.resolver.NoopAddressResolverGroup
+import io.netty5.util.ReferenceCountUtil
+import io.netty5.util.concurrent.Future
+import io.netty5.util.concurrent.FutureListener
+import io.netty5.util.concurrent.Promise
 import model.PROXY_HANDLER_NAME
 import model.RELAY_HANDLER_NAME
 import model.config.*
@@ -100,7 +99,7 @@ fun relayAndOutbound(
     originCTX: ChannelHandlerContext,
     originCTXRelayHandler: (Channel) -> RelayInboundHandler = { RelayInboundHandler(it) },
     outbound: Outbound,
-    connectEstablishedCallback: (Channel) -> ChannelFuture,
+    connectEstablishedCallback: (Channel) -> Future<Void>,
     afterAddRelayHandler: (Channel) -> Unit = {},
     connectFail: () -> Unit = {},
     odor: Odor
@@ -110,7 +109,7 @@ fun relayAndOutbound(
         val outboundChannel = future.now
         if (future.isSuccess) {
             logger.trace { "outboundChannel: $outboundChannel" }
-            connectEstablishedCallback(outboundChannel).addListener(FutureListener {
+            connectEstablishedCallback(outboundChannel).addListener {
                 if (it.isSuccess) {
                     outboundChannel.pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(originCTX.channel()))
                     originCTX.pipeline().addLast(RELAY_HANDLER_NAME, originCTXRelayHandler(outboundChannel))
@@ -118,7 +117,7 @@ fun relayAndOutbound(
                 } else {
                     logger.error(it.cause()) { "connectEstablishedCallback fail: ${it.cause().message}" }
                 }
-            })
+            }
         } else {
             logger.error(future.cause().message)
             logger.debug { future.cause().stackTrace }
@@ -128,7 +127,7 @@ fun relayAndOutbound(
     outbound(
         outbound = outbound,
         connectListener = connectListener,
-        eventLoopGroup = originCTX.channel().eventLoop(),
+        eventLoopGroup = originCTX.channel().executor(),
         odor = odor
     )
 }
@@ -141,7 +140,7 @@ private fun outbound(
     outbound: Outbound,
     connectListener: FutureListener<Channel>,
     odor: Odor,
-    eventLoopGroup: EventLoopGroup = NioEventLoopGroup()
+    eventLoopGroup: EventLoopGroup
 ) {
     if (outbound.outboundStreamBy == null) {
         return galaxy(connectListener, odor, eventLoopGroup)
@@ -183,17 +182,17 @@ private fun tlsStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
+    odor.notDns = true
     odor.redirectPort = tcpOutboundSetting.port
     odor.redirectHost = tcpOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
-    promise.addListener(connectListener)
+    promise.asFuture().addListener(connectListener)
     val sslCtx: SslContext =
         SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
     connect(
         eventLoopGroup, {
             mutableListOf(
-                HandlerPair(sslCtx.newHandler(it.alloc(), tcpOutboundSetting.host, tcpOutboundSetting.port)),
+                HandlerPair(sslCtx.newHandler(it.bufferAllocator(), tcpOutboundSetting.host, tcpOutboundSetting.port)),
                 HandlerPair(ChannelActiveHandler(promise)),
             )
         }, odor
@@ -206,11 +205,11 @@ private fun tcpStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
+    odor.notDns = true
     odor.redirectPort = tcpOutboundSetting.port
     odor.redirectHost = tcpOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
-    promise.addListener(connectListener)
+    promise.asFuture().addListener(connectListener)
 
     connect(
         eventLoopGroup, {
@@ -227,11 +226,11 @@ private fun wssStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
+    odor.notDns = true
     odor.redirectPort = wsOutboundSetting.port
     odor.redirectHost = wsOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
-    promise.addListener(connectListener)
+    promise.asFuture().addListener(connectListener)
 
     val uri =
         URI("wss://${wsOutboundSetting.host}:${wsOutboundSetting.port}/${wsOutboundSetting.path.removePrefix("/")}")
@@ -241,14 +240,14 @@ private fun wssStream(
 
     connect(eventLoopGroup, {
         mutableListOf(
-            HandlerPair(sslCtx.newHandler(it.alloc(), wsOutboundSetting.host, wsOutboundSetting.port)),
+            HandlerPair(sslCtx.newHandler(it.bufferAllocator(), wsOutboundSetting.host, wsOutboundSetting.port)),
             HandlerPair(HttpClientCodec()),
             HandlerPair(HttpObjectAggregator(8192)),
             HandlerPair(WebSocketClientCompressionHandler.INSTANCE),
             HandlerPair(
                 WebSocketClientProtocolHandler(
                     WebSocketClientHandshakerFactory.newHandshaker(
-                        uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
+                        uri, WebSocketVersion.V13, null, true, HttpHeaders.emptyHeaders()
                     )
                 )
             ),
@@ -263,11 +262,11 @@ private fun wsStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
+    odor.notDns = true
     odor.redirectHost = wsOutboundSetting.host
     odor.redirectPort = wsOutboundSetting.port
     val promise = eventLoopGroup.next().newPromise<Channel>()
-    promise.addListener(connectListener)
+    promise.asFuture().addListener(connectListener)
 
     val uri =
         URI("ws://${wsOutboundSetting.host}:${wsOutboundSetting.port}/${wsOutboundSetting.path.removePrefix("/")}")
@@ -279,7 +278,7 @@ private fun wsStream(
             HandlerPair(
                 WebSocketClientProtocolHandler(
                     WebSocketClientHandshakerFactory.newHandshaker(
-                        uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
+                        uri, WebSocketVersion.V13, null, true, HttpHeaders.emptyHeaders()
                     )
                 )
             ),
@@ -293,7 +292,7 @@ private fun wsStream(
 private fun galaxy(
     connectListener: FutureListener<Channel>, odor: Odor, eventLoopGroup: EventLoopGroup
 ) {
-    val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
+    val promise = eventLoopGroup.next().newPromise<Channel>().also { it.asFuture().addListener(connectListener) }
     connect(eventLoopGroup, {
         mutableListOf(
             HandlerPair(ChannelActiveHandler(promise))
@@ -307,8 +306,8 @@ private fun httpStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
-    val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
+    odor.notDns = true
+    val promise = eventLoopGroup.next().newPromise<Channel>().also { it.asFuture().addListener(connectListener) }
     val proxyHandler = if (httpOutboundSetting.auth == null) {
         HttpProxyHandler(
             InetSocketAddress(
@@ -336,8 +335,8 @@ private fun socks5Stream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
-    val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
+    odor.notDns = true
+    val promise = eventLoopGroup.next().newPromise<Channel>().also { it.asFuture().addListener(connectListener) }
     val proxyHandler = if (socks5OutboundSetting.auth == null) {
         Socks5ProxyHandler(
             InetSocketAddress(
@@ -403,7 +402,7 @@ private fun connectTcp(
             }
         }
         .channel(NioSocketChannel::class.java)
-        .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+        .handler(LoggingHandler(LogLevel.TRACE, BufferFormat.SIMPLE))
         .handler(channelInitializer)
         .connect(socketAddress)
 }
@@ -421,7 +420,7 @@ private fun connectUdp(
             }
         }
         .channel(NioDatagramChannel::class.java)
-        .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+        .handler(LoggingHandler(LogLevel.TRACE, BufferFormat.SIMPLE))
         .handler(channelInitializer)
         .connect(socketAddress)
 }
@@ -429,18 +428,18 @@ private fun connectUdp(
 /**
  * basic activator for client connected, some protocol not have complex handshake process, so we can use this activator to active other operation
  */
-class ChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHandler() {
+class ChannelActiveHandler(private val promise: Promise<Channel>) : ChannelHandler {
     private val logger = KotlinLogging.logger {}
     override fun channelActive(ctx: ChannelHandlerContext) {
         super.channelActive(ctx)
         promise.setSuccess(ctx.channel())
     }
 
-    override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
+    override fun channelInboundEvent(ctx: ChannelHandlerContext, evt: Any?) {
         if (evt is ProxyConnectionEvent) {
             logger.trace { "ProxyConnectionEvent: $evt" }
         }
-        ctx.fireUserEventTriggered(evt)
+        ctx.fireChannelInboundEvent(evt)
     }
 }
 
@@ -449,19 +448,19 @@ class ChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuple
  * relay from client channel to server
  */
 open class RelayInboundHandler(private val relayChannel: Channel, private val inActiveCallBack: () -> Unit = {}) :
-    ChannelInboundHandlerAdapter() {
+    SimpleChannelInboundHandler<Any>() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
 
     override fun channelActive(ctx: ChannelHandlerContext) {
-        ctx.writeAndFlush(Unpooled.EMPTY_BUFFER)
+//        ctx.writeAndFlush(Unpooled.EMPTY_BUFFER)
     }
 
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+    override fun messageReceived(ctx: ChannelHandlerContext, msg: Any) {
         if (relayChannel.isActive) {
 
-            if (msg is DatagramPacket && relayChannel is AbstractNioByteChannel) {
+            if (msg is DatagramPacket && relayChannel is AbstractNioByteChannel<*, *, *>) {
                 logger.trace(
                     "relay inbound read from [{}] pipeline handlers:{}, to [{}] pipeline handlers:{}, write message:{}",
                     ctx.channel().id().asShortText(),
@@ -470,7 +469,7 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
                     relayChannel.pipeline().names(),
                     msg.javaClass.name
                 )
-                relayChannel.writeAndFlush(msg.content()).addListener(ChannelFutureListener {
+                relayChannel.writeAndFlush(msg.content()).addListener {
                     if (!it.isSuccess) {
                         logger.error(
                             "relay inbound write message:${msg.javaClass.name} to [${
@@ -478,7 +477,7 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
                             }] failed, cause: ${it.cause().message}", it.cause()
                         )
                     }
-                })
+                }
                 return
             }
 
@@ -490,7 +489,7 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
                 relayChannel.pipeline().names(),
                 msg.javaClass.name
             )
-            relayChannel.writeAndFlush(msg).addListener(ChannelFutureListener {
+            relayChannel.writeAndFlush(msg).addListener {
                 if (!it.isSuccess) {
                     logger.error(
                         "relay inbound write message:${msg.javaClass.name} to [${
@@ -498,7 +497,7 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
                         }] failed, cause: ${it.cause().message}", it.cause()
                     )
                 }
-            })
+            }
         } else {
             logger.warn(
                 "[${
@@ -525,8 +524,7 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
         }
     }
 
-    @Suppress("OVERRIDE_DEPRECATION")
-    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+    override fun channelExceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         logger.error(
             "relay inbound handler exception caught, [${ctx.channel().id()}], pipeline: ${
                 ctx.channel().pipeline().names()

@@ -1,7 +1,7 @@
 package utils
 
-import io.netty.handler.codec.socks.SocksAddressType
-import io.netty.util.NetUtil
+import io.netty.contrib.handler.codec.socks.SocksAddressType
+import io.netty5.util.NetUtil
 import mu.KotlinLogging
 import java.util.*
 

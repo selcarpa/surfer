@@ -1,21 +1,19 @@
 package protocol
 
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.ChannelInboundHandlerAdapter
-import io.netty.util.ReferenceCountUtil
+import io.netty5.channel.ChannelHandlerContext
+import io.netty5.channel.SimpleChannelInboundHandler
 import mu.KotlinLogging
 
-class DiscardHandler : ChannelInboundHandlerAdapter() {
+class DiscardHandler : SimpleChannelInboundHandler<Any>() {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+    override fun messageReceived(ctx: ChannelHandlerContext, msg: Any) {
         // Discard the received data silently.
-        ReferenceCountUtil.release(msg)
     }
 
     @Suppress("OVERRIDE_DEPRECATION")
-    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+    override fun channelExceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         logger.error(cause){
             "discard handler exception caught, [${ctx.channel().id()}], pipeline: ${
                 ctx.channel().pipeline().names()

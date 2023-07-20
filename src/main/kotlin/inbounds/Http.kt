@@ -1,11 +1,11 @@
 package inbounds
 
 
-import io.netty.buffer.ByteBuf
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.SimpleChannelInboundHandler
-import io.netty.channel.embedded.EmbeddedChannel
-import io.netty.handler.codec.http.*
+import io.netty5.buffer.Buffer
+import io.netty5.channel.ChannelHandlerContext
+import io.netty5.channel.SimpleChannelInboundHandler
+import io.netty5.channel.embedded.EmbeddedChannel
+import io.netty5.handler.codec.http.*
 import model.config.Inbound
 import model.protocol.Odor
 import model.protocol.Protocol
@@ -22,11 +22,12 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
-        logger.warn { "[${ctx.channel().id().asShortText()}] channel inactive"}
+        logger.warn { "[${ctx.channel().id().asShortText()}] channel inactive" }
         super.channelInactive(ctx)
     }
 
-    override fun channelRead0(originCTX: ChannelHandlerContext, msg: HttpRequest) {
+    override fun messageReceived(originCTX: ChannelHandlerContext, msg: HttpRequest) {
+
         //http proxy and http connect method
         logger.info(
             "http inbound: [{}], method: {}, uri: {}",
@@ -57,7 +58,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
         )
         val ch = EmbeddedChannel(HttpRequestEncoder())
         ch.writeOutbound(request)
-        val encoded = ch.readOutbound<ByteBuf>()
+        val encoded = ch.readOutbound<Buffer>()
         ch.close()
         val resolveOutbound = resolveOutbound(inbound, odor)
 
@@ -108,7 +109,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
             fromChannel = originCTX.channel().id().asShortText()
         )
 
-        val resolveOutbound = resolveOutbound(inbound,odor)
+        val resolveOutbound = resolveOutbound(inbound, odor)
         resolveOutbound.ifPresent { outbound ->
             relayAndOutbound(
                 RelayAndOutboundOp(

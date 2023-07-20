@@ -1,8 +1,6 @@
 package utils
 
-import io.netty.buffer.Unpooled
-import io.netty.channel.Channel
-import io.netty.channel.ChannelFutureListener
+import io.netty5.channel.Channel
 import mu.KotlinLogging
 
 object ChannelUtils {
@@ -15,7 +13,8 @@ object ChannelUtils {
     fun closeOnFlush(ch: Channel) {
         logger.debug { "closeOnFlush, [${ch.id().asShortText()}]" }
         if (ch.isActive) {
-            ch.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
+            //todo removed
+//            ch.writeAndFlush(Unpooled.EMPTY_BUFFER).addListener(ChannelFutureListener.CLOSE)
         }
     }
 }
