@@ -13,6 +13,7 @@ import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
+import io.netty.handler.ssl.SslProvider
 import io.netty.handler.stream.ChunkedWriteHandler
 import io.netty.handler.timeout.IdleStateHandler
 import io.netty.util.concurrent.FutureListener
@@ -102,7 +103,8 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
                 initWebsocketInbound(ch, inbound.inboundStreamBy.wsInboundSetting!!, handleShakePromise)
             }
-            Protocol.TLS->{
+
+            Protocol.TLS -> {
                 val handleShakePromise = ch.eventLoop().next().newPromise<Channel>()
                 handleShakePromise.addListener(FutureListener { future ->
                     if (future.isSuccess) {
@@ -133,7 +135,8 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
                 tlsInboundSetting.password
             ).build()
         } else {
-            SslContextBuilder.forServer(File(tlsInboundSetting.keyCertChainFile), File(tlsInboundSetting.keyFile)).build()
+            SslContextBuilder.forServer(File(tlsInboundSetting.keyCertChainFile), File(tlsInboundSetting.keyFile))
+                .sslProvider(SslProvider.OPENSSL).build()
         }
         ch.pipeline().addLast(
             sslCtx.newHandler(ch.alloc()),

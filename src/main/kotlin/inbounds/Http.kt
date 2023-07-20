@@ -61,7 +61,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
         ch.close()
         val resolveOutbound = resolveOutbound(inbound, odor)
 
-        logger.trace("http proxy outbound from {}, content: {}", originCTX.channel().id().asShortText(), request)
+        logger.trace("http proxy outbound from [{}], to: {}", originCTX.channel().id().asShortText(), request.uri())
         resolveOutbound.ifPresent { outbound ->
             relayAndOutbound(
                 RelayAndOutboundOp(

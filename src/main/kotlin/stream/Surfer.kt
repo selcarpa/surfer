@@ -24,6 +24,7 @@ import io.netty.handler.proxy.ProxyConnectionEvent
 import io.netty.handler.proxy.Socks5ProxyHandler
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
+import io.netty.handler.ssl.SslProvider
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.handler.timeout.IdleStateHandler
 import io.netty.resolver.NoopAddressResolverGroup
@@ -189,7 +190,7 @@ private fun tlsStream(
     val promise = eventLoopGroup.next().newPromise<Channel>()
     promise.addListener(connectListener)
     val sslCtx: SslContext =
-        SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+        SslContextBuilder.forClient().sslProvider(SslProvider.OPENSSL).trustManager(InsecureTrustManagerFactory.INSTANCE).build()
     connect(
         eventLoopGroup, {
             mutableListOf(
