@@ -5,6 +5,7 @@ import io.netty.contrib.handler.proxy.HttpProxyHandler
 import io.netty.contrib.handler.proxy.ProxyConnectionEvent
 import io.netty.contrib.handler.proxy.Socks5ProxyHandler
 import io.netty5.bootstrap.Bootstrap
+import io.netty5.buffer.Buffer
 import io.netty5.channel.*
 import io.netty5.channel.nio.AbstractNioByteChannel
 import io.netty5.channel.socket.DatagramPacket
@@ -489,7 +490,13 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
                 relayChannel.pipeline().names(),
                 msg.javaClass.name
             )
-            relayChannel.writeAndFlush(msg).addListener {
+            relayChannel.writeAndFlush(
+                if (msg is Buffer) {
+                    msg.copy()
+                }else{
+                    msg
+                }
+            ).addListener {
                 if (!it.isSuccess) {
                     logger.error(
                         "relay inbound write message:${msg.javaClass.name} to [${

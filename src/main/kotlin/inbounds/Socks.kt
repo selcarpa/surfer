@@ -1,8 +1,8 @@
 package inbounds
 
 
-import io.netty.contrib.handler.codec.socks.SocksMessage
-import io.netty.contrib.handler.codec.socks.SocksProtocolVersion
+import io.netty.contrib.handler.codec.socksx.SocksMessage
+import io.netty.contrib.handler.codec.socksx.SocksVersion
 import io.netty.contrib.handler.codec.socksx.v5.*
 import io.netty5.channel.ChannelHandlerContext
 import io.netty5.channel.SimpleChannelInboundHandler
@@ -23,8 +23,8 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
     private var authed = false
 
     public override fun messageReceived(ctx: ChannelHandlerContext, socksRequest: SocksMessage) {
-        when (socksRequest.protocolVersion()!!) {
-            SocksProtocolVersion.SOCKS5 -> socks5Connect(ctx, socksRequest)
+        when (socksRequest.version()!!) {
+            SocksVersion.SOCKS5 -> socks5Connect(ctx, socksRequest)
             else -> {
                 ctx.close()
             }
@@ -52,10 +52,10 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
                 if (inbound.socks5Setting?.auth != null || !authed) {
                     ctx.close()
                 }
-                if ((socksRequest as Socks5CommandRequest).type() === Socks5CommandType.CONNECT) {
+                if (socksRequest.type() === Socks5CommandType.CONNECT) {
                     ctx.pipeline().addLast(SocksServerConnectHandler(inbound))
-                    ctx.pipeline().remove(this)
                     ctx.fireChannelRead(socksRequest)
+                    ctx.pipeline().remove(this)
                 } else {
                     ctx.close()
                 }

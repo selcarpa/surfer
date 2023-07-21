@@ -24,10 +24,6 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>) :
         if (evt is WebSocketHandshakeCompletionEvent) {
             handleShakePromise.setSuccess(ctx.channel())
         }
-        if (evt is WebSocketClientHandshakeCompletionEvent) {
-            handleShakePromise.setSuccess(ctx.channel())
-            super.channelInboundEvent(ctx, evt)
-        }
     }
 
 
