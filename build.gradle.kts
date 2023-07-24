@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "one.tain"
-version = "1.12-netty5-SNAPSHOT"
+version = "1.13-netty5-SNAPSHOT"
 
 repositories {
     mavenCentral()

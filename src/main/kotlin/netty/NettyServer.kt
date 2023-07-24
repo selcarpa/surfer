@@ -4,11 +4,14 @@ package netty
 import io.netty5.bootstrap.ServerBootstrap
 import io.netty5.channel.EventLoopGroup
 import io.netty5.channel.MultithreadEventLoopGroup
+import io.netty5.channel.SingleThreadEventLoop
 import io.netty5.channel.nio.NioHandler
 import io.netty5.channel.socket.nio.NioServerSocketChannel
 import io.netty5.handler.logging.BufferFormat
 import io.netty5.handler.logging.LogLevel
 import io.netty5.handler.logging.LoggingHandler
+import io.netty5.util.concurrent.DefaultThreadFactory
+import io.netty5.util.concurrent.ThreadPerTaskExecutor
 import model.config.Config.Configuration
 import model.config.Inbound
 import model.protocol.Protocol
@@ -23,8 +26,20 @@ import kotlin.system.exitProcess
 object NettyServer {
     private val logger = KotlinLogging.logger {}
 
-    private val bossGroup: EventLoopGroup = MultithreadEventLoopGroup(1, NioHandler.newFactory())
-    private val workerGroup: EventLoopGroup = MultithreadEventLoopGroup(NioHandler.newFactory())
+    private val bossGroup:EventLoopGroup= SingleThreadEventLoop(
+        ThreadPerTaskExecutor(
+            DefaultThreadFactory(
+                "BossGroup", Thread.MAX_PRIORITY
+            )
+        ), NioHandler.newFactory().newHandler()
+    )
+    private val workerGroup: EventLoopGroup = MultithreadEventLoopGroup(
+        ThreadPerTaskExecutor(
+            DefaultThreadFactory(
+                "SurferELG", Thread.MAX_PRIORITY
+            )
+        ), NioHandler.newFactory()
+    )
     private var tcpBind: Boolean = false
     fun start() {
         //tcp
