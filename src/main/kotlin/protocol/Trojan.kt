@@ -117,6 +117,33 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
     }
 }
 
+class TrojanOutboundHandler(
+    private val trojanSetting: TrojanSetting,
+    private val trojanRequest: TrojanRequest
+) : ChannelHandler {
+
+    constructor(
+        outbound: Outbound, odor: Odor
+    ) : this(
+        outbound.trojanSetting!!, TrojanRequest(
+            Socks5CommandType.CONNECT.byteValue(),
+            odor.addressType().byteValue(),
+            odor.host,
+            odor.port
+        )
+    )
+
+    override fun write(ctx: ChannelHandlerContext?, msg: Any?): Future<Void> {
+        if (msg is Buffer) {
+            val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
+            ReferenceCountUtil.release(msg)
+            val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
+            return super.write(ctx, trojanByteBuf)
+        }
+        return super.write(ctx, msg)
+    }
+}
+
 class TrojanRelayInboundHandler(
     private val relayChannel: Channel,
     private val trojanSetting: TrojanSetting,
@@ -174,34 +201,51 @@ fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequ
     )
 }
 
-class TrojanProxy(socketAddress: InetSocketAddress) : ProxyHandler(socketAddress) {
+class TrojanProxy(
+    socketAddress: InetSocketAddress,
+    trojanSetting: TrojanSetting,
+    trojanRequest: TrojanRequest
+) : ProxyHandler(socketAddress) {
+    constructor(outbound: Outbound, odor: Odor) : this(
+        InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
+        outbound.trojanSetting!!,
+        TrojanRequest(
+            Socks5CommandType.CONNECT.byteValue(),
+            odor.addressType().byteValue(),
+            odor.host,
+            odor.port
+        )
+    )
+
+    private val trojanOutboundHandler = TrojanOutboundHandler(trojanSetting, trojanRequest)
     override fun protocol(): String {
         return "TROJAN"
     }
 
     override fun authScheme(): String {
-        return "TROJAN"
+        return "none"
     }
 
     override fun addCodec(ctx: ChannelHandlerContext) {
         val p = ctx.pipeline()
         val name = ctx.name()
+        p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
     }
 
     override fun removeEncoder(ctx: ChannelHandlerContext) {
-        TODO("Not yet implemented")
+        ctx.pipeline().remove(TROJAN_PROXY_OUTBOUND)
     }
 
     override fun removeDecoder(ctx: ChannelHandlerContext) {
-        TODO("Not yet implemented")
+        //ignored
     }
 
-    override fun newInitialMessage(ctx: ChannelHandlerContext): Any {
-        TODO("Not yet implemented")
+    override fun newInitialMessage(ctx: ChannelHandlerContext): Any? {
+        return null
     }
 
     override fun handleResponse(ctx: ChannelHandlerContext, response: Any): Boolean {
-        TODO("Not yet implemented")
+        return false
     }
 
 }

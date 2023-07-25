@@ -2,6 +2,7 @@ package model
 
 const val RELAY_HANDLER_NAME = "relay_handler"
 const val PROXY_HANDLER_NAME = "proxy_handler"
+const val TROJAN_PROXY_OUTBOUND = "trojan_proxy_outbound"
 
 enum class LogLevel {
     TRACE, DEBUG, INFO, WARN, ERROR, OFF;
