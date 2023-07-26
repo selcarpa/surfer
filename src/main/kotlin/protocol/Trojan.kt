@@ -4,14 +4,13 @@ package protocol
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
 import io.netty.buffer.Unpooled
-import io.netty.channel.Channel
-import io.netty.channel.ChannelHandlerContext
-import io.netty.channel.SimpleChannelInboundHandler
+import io.netty.channel.*
 import io.netty.handler.codec.DecoderException
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.handler.proxy.ProxyHandler
 import io.netty.util.ReferenceCountUtil
 import model.RELAY_HANDLER_NAME
+import model.TROJAN_PROXY_OUTBOUND
 import model.config.Inbound
 import model.config.Outbound
 import model.config.TrojanSetting
@@ -120,7 +119,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
 class TrojanOutboundHandler(
     private val trojanSetting: TrojanSetting,
     private val trojanRequest: TrojanRequest
-) : ChannelHandler {
+) : ChannelDuplexHandler() {
 
     constructor(
         outbound: Outbound, odor: Odor
@@ -133,15 +132,18 @@ class TrojanOutboundHandler(
         )
     )
 
-    override fun write(ctx: ChannelHandlerContext?, msg: Any?): Future<Void> {
-        if (msg is Buffer) {
+    override fun write(ctx: ChannelHandlerContext?, msg: Any?, promise: ChannelPromise?) {
+        if (msg is ByteBuf) {
             val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
             ReferenceCountUtil.release(msg)
             val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
-            return super.write(ctx, trojanByteBuf)
+            super.write(ctx, trojanByteBuf, promise)
+            return
         }
-        return super.write(ctx, msg)
+        super.write(ctx, msg, promise)
     }
+
+
 }
 
 class TrojanRelayInboundHandler(
