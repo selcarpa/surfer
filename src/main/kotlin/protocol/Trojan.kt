@@ -11,7 +11,7 @@ import io.netty5.channel.ChannelHandler
 import io.netty5.channel.ChannelHandlerContext
 import io.netty5.channel.SimpleChannelInboundHandler
 import io.netty5.handler.codec.DecoderException
-import io.netty5.util.ReferenceCountUtil
+import io.netty5.util.Resource
 import io.netty5.util.concurrent.Future
 import io.netty5.util.internal.StringUtil
 import model.RELAY_HANDLER_NAME
@@ -139,7 +139,7 @@ class TrojanOutboundHandler(
     override fun write(ctx: ChannelHandlerContext?, msg: Any?): Future<Void> {
         if (msg is Buffer) {
             val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
-            ReferenceCountUtil.release(msg)
+            Resource.dispose(msg)
             val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
             return super.write(ctx, trojanByteBuf)
         }
@@ -176,7 +176,7 @@ class TrojanRelayInboundHandler(
         when (msg) {
             is Buffer -> {
                 val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
-                ReferenceCountUtil.release(msg)
+                Resource.dispose(msg)
                 val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
                 super.channelRead(ctx, trojanByteBuf)
 
@@ -207,7 +207,7 @@ fun byteBuf2TrojanPackage(msg: Buffer, trojanSetting: TrojanSetting, trojanReque
 class TrojanProxy(
     socketAddress: InetSocketAddress,
     trojanSetting: TrojanSetting,
-    trojanRequest: TrojanRequest
+    trojanRequest: TrojanRequest,
 ) : ProxyHandler(socketAddress) {
     constructor(outbound: Outbound, odor: Odor) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
@@ -236,11 +236,14 @@ class TrojanProxy(
     }
 
     override fun removeEncoder(ctx: ChannelHandlerContext) {
-        ctx.pipeline().remove(TROJAN_PROXY_OUTBOUND)
+        removeDecoder(ctx)
     }
 
     override fun removeDecoder(ctx: ChannelHandlerContext) {
-        //ignored
+        val p = ctx.pipeline()
+        if (p.context(TROJAN_PROXY_OUTBOUND) != null) {
+            p.remove(TROJAN_PROXY_OUTBOUND)
+        }
     }
 
     override fun newInitialMessage(ctx: ChannelHandlerContext): Any? {

@@ -26,7 +26,7 @@ import io.netty5.handler.ssl.SslContextBuilder
 import io.netty5.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty5.handler.timeout.IdleStateHandler
 import io.netty5.resolver.NoopAddressResolverGroup
-import io.netty5.util.ReferenceCountUtil
+import io.netty5.util.Resource
 import io.netty5.util.concurrent.Future
 import io.netty5.util.concurrent.FutureListener
 import io.netty5.util.concurrent.Promise
@@ -44,19 +44,6 @@ import java.net.InetSocketAddress
 import java.net.URI
 
 private val logger = KotlinLogging.logger {}
-
-/**
- * Handle all incoming messages, and relay them to the outbound
- */
-fun union(relayAndOutboundOp: RelayAndOutboundOp, inbound: Inbound, odor: Odor) {
-//    val outboundOptional = resolveOutbound(inbound, odor)
-//
-//    if (outboundOptional.isPresent) {
-//        resolveOutbound(relayAndOutboundOp)
-//    }else{
-//        logger.error { "outbound not found" }
-//    }
-}
 
 /**
  * Commonly used relay and outbound methods
@@ -511,7 +498,7 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
                     relayChannel.id().asShortText()
                 }] relay channel is not active, close message:${msg.javaClass.name}"
             )
-            ReferenceCountUtil.release(msg)
+            Resource.dispose(msg)
             ChannelUtils.closeOnFlush(ctx.channel())
         }
     }

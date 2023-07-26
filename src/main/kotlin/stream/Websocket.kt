@@ -8,6 +8,7 @@ import io.netty5.channel.ChannelHandlerContext
 import io.netty5.handler.codec.http.FullHttpRequest
 import io.netty5.handler.codec.http.websocketx.*
 import io.netty5.util.ReferenceCountUtil
+import io.netty5.util.Resource
 import io.netty5.util.concurrent.Future
 import io.netty5.util.concurrent.Promise
 import mu.KotlinLogging
@@ -74,7 +75,7 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>) :
                 if (msg.isFinalFragment) {
                     if (continuationBuffer != null) {
                         continuationBuffer!!.writeBytes(msg.binaryData())
-                        ReferenceCountUtil.release(msg)
+                        Resource.dispose(msg)
                         ctx.fireChannelRead(continuationBuffer)
                         continuationBuffer = null
                     } else {
@@ -92,7 +93,7 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>) :
 
             else -> {
                 logger.error("WebsocketInbound receive unknown message:${msg.javaClass.name}")
-                ReferenceCountUtil.release(msg)
+                Resource.dispose(msg)
             }
         }
     }
