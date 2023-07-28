@@ -26,7 +26,6 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.handler.timeout.IdleStateHandler
-import io.netty.resolver.NoopAddressResolverGroup
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
@@ -44,19 +43,6 @@ import java.net.InetSocketAddress
 import java.net.URI
 
 private val logger = KotlinLogging.logger {}
-
-/**
- * Handle all incoming messages, and relay them to the outbound
- */
-fun union(relayAndOutboundOp: RelayAndOutboundOp, inbound: Inbound, odor: Odor) {
-//    val outboundOptional = resolveOutbound(inbound, odor)
-//
-//    if (outboundOptional.isPresent) {
-//        resolveOutbound(relayAndOutboundOp)
-//    }else{
-//        logger.error { "outbound not found" }
-//    }
-}
 
 /**
  * Commonly used relay and outbound methods
@@ -399,7 +385,7 @@ private fun connectTcp(
     Bootstrap().group(eventLoopGroup)
         .also {
             if (!notDns) {
-                it.resolver(NoopAddressResolverGroup.INSTANCE)
+                it.disableResolver()
             }
         }
         .channel(NioSocketChannel::class.java)
@@ -417,7 +403,7 @@ private fun connectUdp(
     Bootstrap().group(eventLoopGroup)
         .also {
             if (!notDns) {
-                it.resolver(NoopAddressResolverGroup.INSTANCE)
+                it.disableResolver()
             }
         }
         .channel(NioDatagramChannel::class.java)
