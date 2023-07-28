@@ -1,6 +1,6 @@
 package model.protocol
 
-enum class Protocol(val superProtocol: Protocol?) {
+enum class Protocol(private val superProtocol: Protocol?) {
     TCP(null),
     UDP(null),
     TLS(TCP),

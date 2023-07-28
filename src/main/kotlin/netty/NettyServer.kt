@@ -12,6 +12,8 @@ import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.logging.ByteBufFormat
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
+import io.netty.util.concurrent.DefaultThreadFactory
+import io.netty.util.concurrent.ThreadPerTaskExecutor
 import model.config.Config.Configuration
 import model.config.Inbound
 import model.protocol.Protocol
@@ -25,8 +27,8 @@ import kotlin.system.exitProcess
 object NettyServer {
     private val logger = KotlinLogging.logger {}
 
-    private val bossGroup: EventLoopGroup = NioEventLoopGroup()
-    private val workerGroup: EventLoopGroup = NioEventLoopGroup()
+    private val bossGroup: EventLoopGroup = NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("BossGroup")))
+    private val workerGroup: EventLoopGroup = NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
     private var tcpBind: Boolean = false
     fun start() {
         //tcp
