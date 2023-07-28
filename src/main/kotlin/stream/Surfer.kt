@@ -37,7 +37,7 @@ import model.protocol.Protocol
 import mu.KotlinLogging
 import netty.IdleCloseHandler
 import protocol.DiscardHandler
-import protocol.TrojanRelayInboundHandler
+import protocol.TrojanProxy
 import utils.ChannelUtils
 import java.net.InetSocketAddress
 import java.net.URI
@@ -49,28 +49,6 @@ private val logger = KotlinLogging.logger {}
  * @param relayAndOutboundOp [RelayAndOutboundOp]
  */
 fun relayAndOutbound(relayAndOutboundOp: RelayAndOutboundOp) {
-    if (!relayAndOutboundOp.overrideRelayHandler) {
-        when (relayAndOutboundOp.outbound.protocol) {
-            "galaxy" -> {
-                //ignored
-            }
-
-            "trojan" -> {
-                relayAndOutboundOp.originCTXRelayHandler = {
-                    TrojanRelayInboundHandler(
-                        it,
-                        relayAndOutboundOp.outbound,
-                        relayAndOutboundOp.odor
-                    )
-                }
-            }
-
-            else -> {
-                logger.error { "protocol ${relayAndOutboundOp.outbound.protocol} not supported" }
-                relayAndOutboundOp.connectFail()
-            }
-        }
-    }
     relayAndOutbound(
         originCTX = relayAndOutboundOp.originCTX,
         originCTXRelayHandler = relayAndOutboundOp.originCTXRelayHandler,
@@ -91,7 +69,6 @@ fun relayAndOutbound(
     connectFail: () -> Unit = {},
     odor: Odor
 ) {
-
     val connectListener = FutureListener<Channel> { future ->
         val outboundChannel = future.now
         if (future.isSuccess) {
@@ -134,11 +111,11 @@ private fun outbound(
     }
     return when (Protocol.valueOfOrNull(outbound.outboundStreamBy.type)) {
         Protocol.WSS -> wssStream(
-            connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup, odor
+            connectListener, outbound, eventLoopGroup, odor
         )
 
-        Protocol.WS -> wsStream(
-            connectListener, outbound.outboundStreamBy.wsOutboundSetting!!, eventLoopGroup, odor
+        Protocol.WS -> wssStream(
+            connectListener, outbound, eventLoopGroup, odor
         )
 
         Protocol.SOCKS5 -> socks5Stream(
@@ -169,7 +146,7 @@ private fun tlsStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
+    odor.notDns = true
     odor.redirectPort = tcpOutboundSetting.port
     odor.redirectHost = tcpOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
@@ -192,7 +169,7 @@ private fun tcpStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
+    odor.notDns = true
     odor.redirectPort = tcpOutboundSetting.port
     odor.redirectHost = tcpOutboundSetting.host
     val promise = eventLoopGroup.next().newPromise<Channel>()
@@ -209,36 +186,19 @@ private fun tcpStream(
 
 private fun wssStream(
     connectListener: FutureListener<Channel>,
-    wsOutboundSetting: WsOutboundSetting,
+    outbound: Outbound,
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
-    odor.redirectPort = wsOutboundSetting.port
-    odor.redirectHost = wsOutboundSetting.host
-    val promise = eventLoopGroup.next().newPromise<Channel>()
-    promise.addListener(connectListener)
-
-    val uri =
-        URI("wss://${wsOutboundSetting.host}:${wsOutboundSetting.port}/${wsOutboundSetting.path.removePrefix("/")}")
-
-    val sslCtx: SslContext =
-        SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+    odor.notDns = true
+    odor.redirectPort = outbound.outboundStreamBy!!.wsOutboundSetting!!.port
+    odor.redirectHost = outbound.outboundStreamBy!!.wsOutboundSetting!!.host
+    val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
 
     connect(eventLoopGroup, {
         mutableListOf(
-            HandlerPair(sslCtx.newHandler(it.alloc(), wsOutboundSetting.host, wsOutboundSetting.port)),
-            HandlerPair(HttpClientCodec()),
-            HandlerPair(HttpObjectAggregator(8192)),
-            HandlerPair(WebSocketClientCompressionHandler.INSTANCE),
-            HandlerPair(
-                WebSocketClientProtocolHandler(
-                    WebSocketClientHandshakerFactory.newHandshaker(
-                        uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-                    )
-                )
-            ),
-            HandlerPair(WebsocketDuplexHandler(promise))
+            HandlerPair(TrojanProxy(outbound, odor, Protocol.WSS), PROXY_HANDLER_NAME),
+            HandlerPair(ChannelActiveHandler(promise))
         )
     }, odor)
 }
@@ -249,7 +209,7 @@ private fun wsStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
+    odor.notDns = true
     odor.redirectHost = wsOutboundSetting.host
     odor.redirectPort = wsOutboundSetting.port
     val promise = eventLoopGroup.next().newPromise<Channel>()
@@ -293,7 +253,7 @@ private fun httpStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
+    odor.notDns = true
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     val proxyHandler = if (httpOutboundSetting.auth == null) {
         HttpProxyHandler(
@@ -322,7 +282,7 @@ private fun socks5Stream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns=true
+    odor.notDns = true
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     val proxyHandler = if (socks5OutboundSetting.auth == null) {
         Socks5ProxyHandler(

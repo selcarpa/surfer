@@ -13,8 +13,10 @@ import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
 import mu.KotlinLogging
 
-class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>) :
+class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>?) :
     ChannelDuplexHandler() {
+    constructor() : this(null)
+
     companion object {
         private val logger = KotlinLogging.logger {}
     }
@@ -22,14 +24,16 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>) :
     private var continuationBuffer: ByteBuf? = null
 
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
-        if (evt is WebSocketServerProtocolHandler.HandshakeComplete) {
-            handleShakePromise.setSuccess(ctx.channel())
-        }
-        if (evt is WebSocketClientProtocolHandler.ClientHandshakeStateEvent) {
-            if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE) {
+        if (handleShakePromise != null) {
+            if (evt is WebSocketServerProtocolHandler.HandshakeComplete) {
                 handleShakePromise.setSuccess(ctx.channel())
-            } else if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_TIMEOUT) {
-                handleShakePromise.setFailure(Throwable("websocket handshake failed"))
+            }
+            if (evt is WebSocketClientProtocolHandler.ClientHandshakeStateEvent) {
+                if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE) {
+                    handleShakePromise.setSuccess(ctx.channel())
+                } else if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_TIMEOUT) {
+                    handleShakePromise.setFailure(Throwable("websocket handshake failed"))
+                }
             }
         }
         super.userEventTriggered(ctx, evt)
@@ -121,6 +125,7 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>) :
                     }
                 }
             }
+
             else -> {
                 ctx.write(msg, promise)
             }

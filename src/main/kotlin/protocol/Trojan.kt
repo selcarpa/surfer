@@ -8,6 +8,9 @@ import io.netty.channel.*
 import io.netty.handler.codec.DecoderException
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.handler.proxy.ProxyHandler
+import io.netty.handler.ssl.SslContext
+import io.netty.handler.ssl.SslContextBuilder
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.ReferenceCountUtil
 import model.RELAY_HANDLER_NAME
 import model.TROJAN_PROXY_OUTBOUND
@@ -22,6 +25,7 @@ import mu.KotlinLogging
 import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.RelayInboundHandler
+import stream.WebsocketDuplexHandler
 import stream.relayAndOutbound
 import utils.ChannelUtils
 import utils.Sha224Utils
@@ -204,11 +208,12 @@ fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequ
 }
 
 class TrojanProxy(
-    socketAddress: InetSocketAddress,
+    private val  socketAddress: InetSocketAddress,
     trojanSetting: TrojanSetting,
-    trojanRequest: TrojanRequest
+    trojanRequest: TrojanRequest,
+    private val streamBy: Protocol,
 ) : ProxyHandler(socketAddress) {
-    constructor(outbound: Outbound, odor: Odor) : this(
+    constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
         outbound.trojanSetting!!,
         TrojanRequest(
@@ -216,12 +221,13 @@ class TrojanProxy(
             odor.addressType().byteValue(),
             odor.host,
             odor.port
-        )
+        ),
+        streamBy
     )
 
     private val trojanOutboundHandler = TrojanOutboundHandler(trojanSetting, trojanRequest)
     override fun protocol(): String {
-        return "TROJAN"
+        return Protocol.TROJAN.name
     }
 
     override fun authScheme(): String {
@@ -231,7 +237,49 @@ class TrojanProxy(
     override fun addCodec(ctx: ChannelHandlerContext) {
         val p = ctx.pipeline()
         val name = ctx.name()
+
+        when (streamBy) {
+            Protocol.TCP -> {
+                addPreHandledTcp(ctx)
+            }
+            Protocol.TLS -> {
+                addPreHandledTls(ctx)
+            }
+            Protocol.WS -> {
+                addPreHandledWs(ctx)
+            }
+            Protocol.WSS -> {
+                addPreHandledWs(ctx)
+                addPreHandledTls(ctx)
+            }
+            else -> throw IllegalArgumentException("unsupported stream")
+        }
+
         p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
+
+    }
+
+    /**
+     * add websocket handler before trojan outbound handler
+     */
+    private fun addPreHandledWs(ctx: ChannelHandlerContext) {
+        ctx.pipeline().addBefore(ctx.name(), "ws", WebsocketDuplexHandler())
+    }
+
+    /**
+     * add tls handler before trojan outbound handler
+     */
+    private fun addPreHandledTls(ctx: ChannelHandlerContext) {
+        val sslCtx: SslContext =
+            SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
+        ctx.pipeline().addBefore(ctx.name(), "ssl", sslCtx.newHandler(ctx.channel().alloc(), socketAddress.hostName, socketAddress.port))
+    }
+
+    /**
+     * tcp stream needn't any handler
+     */
+    private fun addPreHandledTcp(ctx: ChannelHandlerContext) {
+        //ignored
     }
 
     override fun removeEncoder(ctx: ChannelHandlerContext) {
@@ -247,7 +295,7 @@ class TrojanProxy(
     }
 
     override fun handleResponse(ctx: ChannelHandlerContext, response: Any): Boolean {
-        return false
+        return true
     }
 
 }
