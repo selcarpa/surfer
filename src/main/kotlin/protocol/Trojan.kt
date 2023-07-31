@@ -6,6 +6,13 @@ import io.netty.buffer.ByteBufUtil
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
 import io.netty.handler.codec.DecoderException
+import io.netty.handler.codec.http.DefaultHttpHeaders
+import io.netty.handler.codec.http.HttpClientCodec
+import io.netty.handler.codec.http.HttpObjectAggregator
+import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory
+import io.netty.handler.codec.http.websocketx.WebSocketClientProtocolHandler
+import io.netty.handler.codec.http.websocketx.WebSocketVersion
+import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.handler.proxy.ProxyHandler
 import io.netty.handler.ssl.SslContext
@@ -16,6 +23,7 @@ import model.RELAY_HANDLER_NAME
 import model.TROJAN_PROXY_OUTBOUND
 import model.config.Inbound
 import model.config.Outbound
+import model.config.OutboundStreamBy
 import model.config.TrojanSetting
 import model.protocol.Odor
 import model.protocol.Protocol
@@ -31,6 +39,7 @@ import utils.ChannelUtils
 import utils.Sha224Utils
 import utils.SurferUtils
 import java.net.InetSocketAddress
+import java.net.URI
 
 class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<ByteBuf>() {
     companion object {
@@ -208,13 +217,15 @@ fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequ
 }
 
 class TrojanProxy(
-    private val  socketAddress: InetSocketAddress,
+    private val socketAddress: InetSocketAddress,
+    private val outboundStreamBy: OutboundStreamBy?,
     trojanSetting: TrojanSetting,
     trojanRequest: TrojanRequest,
     private val streamBy: Protocol,
 ) : ProxyHandler(socketAddress) {
     constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
+        outbound.outboundStreamBy,
         outbound.trojanSetting!!,
         TrojanRequest(
             Socks5CommandType.CONNECT.byteValue(),
@@ -249,8 +260,8 @@ class TrojanProxy(
                 addPreHandledWs(ctx)
             }
             Protocol.WSS -> {
-                addPreHandledWs(ctx)
                 addPreHandledTls(ctx)
+                addPreHandledWs(ctx)
             }
             else -> throw IllegalArgumentException("unsupported stream")
         }
@@ -263,6 +274,26 @@ class TrojanProxy(
      * add websocket handler before trojan outbound handler
      */
     private fun addPreHandledWs(ctx: ChannelHandlerContext) {
+        val uri =
+            URI(
+                "ws://${outboundStreamBy!!.wsOutboundSetting!!.host}:${outboundStreamBy.wsOutboundSetting!!.port}/${
+                    outboundStreamBy.wsOutboundSetting.path.removePrefix(
+                        "/"
+                    )
+                }"
+            )
+
+        ctx.pipeline().addBefore(ctx.name(), "HttpClientCodec", HttpClientCodec())
+        ctx.pipeline().addBefore(ctx.name(), "HttpObjectAggregator", HttpObjectAggregator(8192))
+        ctx.pipeline().addBefore(ctx.name(), "WebSocketClientCompressionHandler", WebSocketClientCompressionHandler.INSTANCE)
+
+        ctx.pipeline().addBefore(
+            ctx.name(), "ws-handshake", WebSocketClientProtocolHandler(
+                WebSocketClientHandshakerFactory.newHandshaker(
+                    uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
+                )
+            )
+        )
         ctx.pipeline().addBefore(ctx.name(), "ws", WebsocketDuplexHandler())
     }
 
@@ -272,7 +303,11 @@ class TrojanProxy(
     private fun addPreHandledTls(ctx: ChannelHandlerContext) {
         val sslCtx: SslContext =
             SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
-        ctx.pipeline().addBefore(ctx.name(), "ssl", sslCtx.newHandler(ctx.channel().alloc(), socketAddress.hostName, socketAddress.port))
+        ctx.pipeline().addBefore(
+            ctx.name(),
+            "ssl",
+            sslCtx.newHandler(ctx.channel().alloc(), socketAddress.hostName, socketAddress.port)
+        )
     }
 
     /**

@@ -1,0 +1,21 @@
+{
+  "inbounds": [
+    {
+      "protocol": "trojan",//trojan in
+      "port": 14271,//listen on port
+      "inboundStreamBy": {
+        "type": "tcp"//stream by tcp, not recommended to use
+      },
+      "trojanSettings": [
+        {
+          "password": ""//any String
+        }
+      ]
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "galaxy"//to anywhere of this galaxy
+    }
+  ]
+}

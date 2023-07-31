@@ -102,7 +102,8 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
                 initWebsocketInbound(ch, inbound.inboundStreamBy.wsInboundSetting!!, handleShakePromise)
             }
-            Protocol.TLS->{
+
+            Protocol.TLS -> {
                 val handleShakePromise = ch.eventLoop().next().newPromise<Channel>()
                 handleShakePromise.addListener(FutureListener { future ->
                     if (future.isSuccess) {
@@ -111,6 +112,11 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
                 })
 
                 initTlsInbound(ch, inbound.inboundStreamBy.tlsInboundSetting!!, handleShakePromise)
+            }
+
+            Protocol.TCP -> {
+                // just add a trojan inbound handler is satisfied
+                ch.pipeline().addLast(TrojanInboundHandler(inbound))
             }
 
             else -> {
