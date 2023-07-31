@@ -4,10 +4,7 @@
       "protocol": "trojan",//trojan in
       "port": 14271,//listen on port
       "inboundStreamBy": {
-        "type": "ws",
-        "wsInboundSetting": {
-          "path": "/surfer"//websocket path
-        }
+        "type": "tcp"//stream by tcp, not recommended to use
       },
       "trojanSetting": [
         {

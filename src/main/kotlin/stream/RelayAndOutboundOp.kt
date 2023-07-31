@@ -17,16 +17,7 @@ data class RelayAndOutboundOp(
      * relay handler for origin channel, override it when it is necessary
      */
     var originCTXRelayHandler: (Channel) -> RelayInboundHandler = { RelayInboundHandler(it) }
-        set(value) {
-            field = value
-            overrideRelayHandler = true
-        }
 
-    /**
-     * when overrideRelayHandler is false, in [relayAndOutbound] method, when some protocol set, will override the relay handler,
-     * for example, trojan protocol will override the relay handler to a [protocol.TrojanRelayInboundHandler]
-     */
-    var overrideRelayHandler = false
 
     /**
      * when connect established, do something

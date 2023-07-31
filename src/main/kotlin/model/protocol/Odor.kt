@@ -14,19 +14,7 @@ data class Odor(
     var notDns: Boolean = false,
     var transmissionTrans: Boolean = false,
 ) {
-    fun socketAddress(): InetSocketAddress = InetSocketAddress(
-        if (redirectHost != null) {
-            redirectHost
-        } else {
-            host
-        },
-        if (redirectPort != null) {
-            redirectPort!!
-        } else {
-            port
-        }
-
-    )
+    fun socketAddress(): InetSocketAddress = InetSocketAddress(host, port)
 
 
     fun addressType() = SurferUtils.getAddressType(
