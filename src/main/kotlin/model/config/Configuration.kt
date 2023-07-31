@@ -28,6 +28,10 @@ object Config {
             val content = this::class.java.getResource("/config.json5")?.readText()
             json.decodeFromString<ConfigurationSettings>(content!!)
         } else {
+            if (ConfigurationUrl!!.startsWith("classpath")){
+                val content = this::class.java.getResource(ConfigurationUrl!!.substringAfter("classpath:"))?.readText()
+                return json.decodeFromString<ConfigurationSettings>(content!!)
+            }
             val file = File(ConfigurationUrl!!)
             val content = file.readText()
             if (file.name.endsWith("json") || file.name.endsWith("json5")) {
@@ -67,9 +71,9 @@ data class Socks5Setting(val auth: Auth?)
 @Serializable
 data class Auth(val password: String, val username: String)
 @Serializable
-data class Outbound(val protocol: String, val trojanSetting: TrojanSetting?, val outboundStreamBy: OutboundStreamBy?, val tag:String?)
+data class Outbound(val protocol: String, val trojanSetting: TrojanSetting?,val sock5Setting: Sock5OutboundSetting?,val httpSetting: HttpOutboundSetting?, val outboundStreamBy: OutboundStreamBy?, val tag:String?,var serverDns: Boolean =false)
 @Serializable
-data class OutboundStreamBy(val type: String, val wsOutboundSetting: WsOutboundSetting?,val sock5OutboundSetting: Sock5OutboundSetting?,val httpOutboundSetting: HttpOutboundSetting?,val tcpOutboundSetting:TcpOutboundSetting?)
+data class OutboundStreamBy(val type: String, val wsOutboundSetting: WsOutboundSetting?,val tcpOutboundSetting:TcpOutboundSetting?)
 @Serializable
 data class Sock5OutboundSetting(val auth: Auth?,val port:Int,val host:String)
 @Serializable

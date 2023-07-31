@@ -40,35 +40,17 @@ private val logger = KotlinLogging.logger {}
  * @param relayAndOutboundOp [RelayAndOutboundOp]
  */
 fun relayAndOutbound(relayAndOutboundOp: RelayAndOutboundOp) {
-    relayAndOutbound(
-        originCTX = relayAndOutboundOp.originCTX,
-        originCTXRelayHandler = relayAndOutboundOp.originCTXRelayHandler,
-        outbound = relayAndOutboundOp.outbound,
-        connectEstablishedCallback = relayAndOutboundOp.connectEstablishedCallback,
-        afterAddRelayHandler = relayAndOutboundOp.afterAddRelayHandler,
-        connectFail = relayAndOutboundOp.connectFail,
-        odor = relayAndOutboundOp.odor
-    )
-}
-
-fun relayAndOutbound(
-    originCTX: ChannelHandlerContext,
-    originCTXRelayHandler: (Channel) -> RelayInboundHandler = { RelayInboundHandler(it) },
-    outbound: Outbound,
-    connectEstablishedCallback: (Channel) -> ChannelFuture,
-    afterAddRelayHandler: (Channel) -> Unit = {},
-    connectFail: () -> Unit = {},
-    odor: Odor
-) {
     val connectListener = FutureListener<Channel> { future ->
         val outboundChannel = future.now
         if (future.isSuccess) {
             logger.trace { "outboundChannel: $outboundChannel" }
-            connectEstablishedCallback(outboundChannel).addListener(FutureListener {
+            relayAndOutboundOp.connectEstablishedCallback(outboundChannel).addListener(FutureListener {
                 if (it.isSuccess) {
-                    outboundChannel.pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(originCTX.channel()))
-                    originCTX.pipeline().addLast(RELAY_HANDLER_NAME, originCTXRelayHandler(outboundChannel))
-                    afterAddRelayHandler(outboundChannel)
+                    outboundChannel.pipeline()
+                        .addLast(RELAY_HANDLER_NAME, RelayInboundHandler(relayAndOutboundOp.originCTX.channel()))
+                    relayAndOutboundOp.originCTX.pipeline()
+                        .addLast(RELAY_HANDLER_NAME, relayAndOutboundOp.originCTXRelayHandler(outboundChannel))
+                    relayAndOutboundOp.afterAddRelayHandler(outboundChannel)
                 } else {
                     logger.error(it.cause()) { "connectEstablishedCallback fail: ${it.cause().message}" }
                 }
@@ -76,14 +58,14 @@ fun relayAndOutbound(
         } else {
             logger.error(future.cause().message)
             logger.debug { future.cause().stackTrace }
-            connectFail()
+            relayAndOutboundOp.connectFail()
         }
     }
     outbound(
-        outbound = outbound,
+        outbound = relayAndOutboundOp.outbound,
         connectListener = connectListener,
-        eventLoopGroup = originCTX.channel().eventLoop(),
-        odor = odor
+        eventLoopGroup = relayAndOutboundOp.originCTX.channel().eventLoop(),
+        odor = relayAndOutboundOp.odor
     )
 }
 
@@ -97,48 +79,67 @@ private fun outbound(
     odor: Odor,
     eventLoopGroup: EventLoopGroup = NioEventLoopGroup()
 ) {
-    if (outbound.outboundStreamBy == null) {
+
+    if (Protocol.valueOfOrNull(outbound.protocol) == Protocol.GALAXY) {
         return galaxy(connectListener, odor, eventLoopGroup)
     }
-    return when (Protocol.valueOfOrNull(outbound.outboundStreamBy.type)) {
-        Protocol.WSS -> {
-            odor.notDns = true
-            odor.redirectPort = outbound.outboundStreamBy.wsOutboundSetting!!.port
-            odor.redirectHost = outbound.outboundStreamBy.wsOutboundSetting.host
-            stream(connectListener, outbound, eventLoopGroup, odor, Protocol.WSS)
-        }
 
-        Protocol.WS -> {
-            odor.notDns = true
-            odor.redirectPort = outbound.outboundStreamBy.wsOutboundSetting!!.port
-            odor.redirectHost = outbound.outboundStreamBy.wsOutboundSetting.host
-            stream(connectListener, outbound, eventLoopGroup, odor, Protocol.WS)
-        }
+    setOdorRedirect(outbound, odor)
 
-        Protocol.TCP -> {
-            odor.notDns = true
-            odor.redirectPort = outbound.outboundStreamBy.tcpOutboundSetting!!.port
-            odor.redirectHost = outbound.outboundStreamBy.tcpOutboundSetting.host
-            stream(connectListener, outbound, eventLoopGroup, odor, Protocol.TCP)
-        }
-
-        Protocol.TLS -> {
-            odor.notDns = true
-            odor.redirectPort = outbound.outboundStreamBy.tcpOutboundSetting!!.port
-            odor.redirectHost = outbound.outboundStreamBy.tcpOutboundSetting.host
-            stream(connectListener, outbound, eventLoopGroup, odor, Protocol.TLS)
-        }
-
+    return when (Protocol.valueOfOrNull(outbound.protocol)) {
         Protocol.SOCKS5 -> socks5Stream(
-            connectListener, outbound.outboundStreamBy.sock5OutboundSetting!!, eventLoopGroup, odor
+            connectListener, outbound.sock5Setting!!, eventLoopGroup, odor
         )
 
         Protocol.HTTP -> httpStream(
-            connectListener, outbound.outboundStreamBy.httpOutboundSetting!!, eventLoopGroup, odor
+            connectListener, outbound.httpSetting!!, eventLoopGroup, odor
         )
 
+        Protocol.TROJAN -> {
+            stream(
+                connectListener,
+                outbound,
+                eventLoopGroup,
+                odor,
+                Protocol.valueOfOrNull(outbound.outboundStreamBy!!.type)
+            )
+        }
+
         else -> {
-            logger.error { "stream type ${outbound.outboundStreamBy.type} not supported" }
+            logger.error { "stream type ${outbound.outboundStreamBy!!.type} not supported" }
+
+        }
+    }
+}
+
+fun setOdorRedirect(outbound: Outbound, odor: Odor) {
+    if (outbound.serverDns) {
+        odor.notDns = true
+    }
+    when (Protocol.valueOfOrNull(outbound.outboundStreamBy!!.type)) {
+
+        Protocol.WSS, Protocol.WS -> {
+            odor.redirectPort = outbound.outboundStreamBy.wsOutboundSetting!!.port
+            odor.redirectHost = outbound.outboundStreamBy.wsOutboundSetting.host
+        }
+
+        Protocol.TCP, Protocol.TLS -> {
+            odor.redirectPort = outbound.outboundStreamBy.tcpOutboundSetting!!.port
+            odor.redirectHost = outbound.outboundStreamBy.tcpOutboundSetting.host
+        }
+
+        Protocol.SOCKS5 -> {
+            odor.redirectPort = outbound.sock5Setting!!.port
+            odor.redirectHost = outbound.sock5Setting.host
+        }
+
+        Protocol.HTTP -> {
+            odor.redirectPort = outbound.httpSetting!!.port
+            odor.redirectHost = outbound.httpSetting.host
+        }
+
+        else -> {
+            //ignored
         }
     }
 }
@@ -178,7 +179,6 @@ private fun httpStream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns = true
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     val proxyHandler = if (httpOutboundSetting.auth == null) {
         HttpProxyHandler(
@@ -207,7 +207,6 @@ private fun socks5Stream(
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {
-    odor.notDns = true
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     val proxyHandler = if (socks5OutboundSetting.auth == null) {
         Socks5ProxyHandler(

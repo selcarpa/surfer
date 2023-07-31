@@ -154,7 +154,7 @@ class TrojanOutboundHandler(
             val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
             ReferenceCountUtil.release(msg)
             val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
-            firstPackage=false
+            firstPackage = false
             super.write(ctx, trojanByteBuf, promise)
             return
         }
@@ -194,6 +194,7 @@ class TrojanProxy(
         ),
         streamBy
     )
+
     private val trojanOutboundHandler = TrojanOutboundHandler(trojanSetting, trojanRequest)
     override fun protocol(): String {
         return Protocol.TROJAN.name
@@ -211,21 +212,25 @@ class TrojanProxy(
             Protocol.TCP -> {
                 addPreHandledTcp(ctx)
             }
+
             Protocol.TLS -> {
                 addPreHandledTls(ctx)
             }
+
             Protocol.WS -> {
                 addPreHandledWs(ctx)
             }
+
             Protocol.WSS -> {
                 addPreHandledTls(ctx)
                 addPreHandledWs(ctx)
             }
+
             else -> throw IllegalArgumentException("unsupported stream")
         }
 
         p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-        p.addLast(AutoSuccessHandler {
+        p.addLast("AutoSuccessHandler", AutoSuccessHandler {
             val proxyHandlerClass = ProxyHandler::class.java
             proxyHandlerClass.declaredMethods.forEach {
                 if (it.name == "setConnectSuccess") {
@@ -252,7 +257,8 @@ class TrojanProxy(
 
         ctx.pipeline().addBefore(ctx.name(), "HttpClientCodec", HttpClientCodec())
         ctx.pipeline().addBefore(ctx.name(), "HttpObjectAggregator", HttpObjectAggregator(8192))
-        ctx.pipeline().addBefore(ctx.name(), "WebSocketClientCompressionHandler", WebSocketClientCompressionHandler.INSTANCE)
+        ctx.pipeline()
+            .addBefore(ctx.name(), "WebSocketClientCompressionHandler", WebSocketClientCompressionHandler.INSTANCE)
 
         ctx.pipeline().addBefore(
             ctx.name(), "ws-handshake", WebSocketClientProtocolHandler(
@@ -276,7 +282,6 @@ class TrojanProxy(
             sslCtx.newHandler(ctx.channel().alloc(), socketAddress.hostName, socketAddress.port)
         )
     }
-
 
 
     /**
@@ -305,9 +310,12 @@ class TrojanProxy(
 
 }
 
-class AutoSuccessHandler(private val exec:()->Unit): ChannelInboundHandlerAdapter() {
+class AutoSuccessHandler(private val exec: () -> Unit) : ChannelInboundHandlerAdapter() {
     override fun channelActive(ctx: ChannelHandlerContext) {
         exec()
+        if (ctx.pipeline().context("AutoSuccessHandler") != null) {
+            ctx.pipeline().remove(this)
+        }
         super.channelActive(ctx)
     }
 }

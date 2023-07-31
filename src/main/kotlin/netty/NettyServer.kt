@@ -27,23 +27,26 @@ import kotlin.system.exitProcess
 object NettyServer {
     private val logger = KotlinLogging.logger {}
 
-    private val bossGroup: EventLoopGroup = NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("BossGroup")))
-    private val workerGroup: EventLoopGroup = NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
-    private var tcpBind: Boolean = false
+    private val bossGroup: EventLoopGroup =
+        NioEventLoopGroup(1, ThreadPerTaskExecutor(DefaultThreadFactory("BossGroup")))
+    private val workerGroup: EventLoopGroup =
+        NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
+
     fun start() {
-        //tcp
-        val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup)
-            .channel(NioServerSocketChannel::class.java)
-            .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
-            .childHandler(ProxyChannelInitializer())
+
+        var tcpBind = false
         Optional.ofNullable(Configuration.inbounds).ifPresent {
+            //tcp
+            val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup)
+                .channel(NioServerSocketChannel::class.java)
+                .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+                .childHandler(ProxyChannelInitializer())
             it.stream()
                 .filter { inbound -> transmissionAssert(inbound, Protocol.TCP) }
                 .forEach { inbound ->
                     tcpBootstrap.bind(inbound.port).addListener { future ->
                         if (future.isSuccess) {
                             logger.info("${inbound.protocol} bind ${inbound.port} success")
-                            Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
                         } else {
                             logger.error("bind ${inbound.port} fail, reason:{}", future.cause().message)
                             exitProcess(1)
@@ -55,22 +58,20 @@ object NettyServer {
         if (!tcpBind) {
             logger.debug { "no tcp inbound" }
         }
-        //ukcp
-        val ukcpServerBootstrap = UkcpServerBootstrap()
-        ukcpServerBootstrap.group(workerGroup)
-            .channel(UkcpServerChannel::class.java)
-            .childHandler(ProxyChannelInitializer())
-        ChannelOptionHelper.nodelay(ukcpServerBootstrap, true, 20, 2, true)
-            .childOption(UkcpChannelOption.UKCP_MTU, 512)
-
         Optional.ofNullable(Configuration.inbounds).ifPresent {
+            //ukcp
+            val ukcpServerBootstrap = UkcpServerBootstrap()
+            ukcpServerBootstrap.group(workerGroup)
+                .channel(UkcpServerChannel::class.java)
+                .childHandler(ProxyChannelInitializer())
+            ChannelOptionHelper.nodelay(ukcpServerBootstrap, true, 20, 2, true)
+                .childOption(UkcpChannelOption.UKCP_MTU, 512)
             it.stream()
                 .filter { inbound -> transmissionAssert(inbound, Protocol.UKCP) }
                 .forEach { inbound ->
                     ukcpServerBootstrap.bind(inbound.port).addListener { future ->
                         if (future.isSuccess) {
                             logger.info("${inbound.protocol} bind ${inbound.port} success")
-                            Runtime.getRuntime().addShutdownHook(Thread({ close() }, "Server Shutdown Thread"))
                         } else {
                             logger.error("bind ${inbound.port} fail, reason:{}", future.cause().message)
                             exitProcess(1)
@@ -78,6 +79,7 @@ object NettyServer {
                     }
                 }
         }
+        Runtime.getRuntime().addShutdownHook(Thread({ close() }, "bye"))
     }
 
     private fun transmissionAssert(inbound: Inbound, desProtocol: Protocol): Boolean {
@@ -99,6 +101,7 @@ object NettyServer {
      * close gracefully
      */
     private fun close() {
+        logger.info("我们所经历的每个日常，也或许是一系列的奇迹连续地发生！")
         if (!(bossGroup.isShutdown || bossGroup.isShuttingDown)) {
             bossGroup.shutdownGracefully()
         }

@@ -1,0 +1,42 @@
+{
+  "inbounds": [
+    {
+      "port": 14270,
+      "protocol": "socks5",
+      "socks5Setting": {
+      }
+    },
+    {
+      port: 14272,
+      protocol: "http"
+    },
+    {
+      "protocol": "trojan",
+      "port": 14273,
+      "inboundStreamBy": {
+        "type": "ws",
+        "wsInboundSetting": {
+          "path": "/surfer"
+        }
+      },
+      "trojanSetting": {
+        "password": "surfer"
+      }
+    },
+    {
+      "protocol": "trojan",
+      "port": 14274,
+      "inboundStreamBy": {
+        "type": "tcp"
+      },
+      "trojanSetting": {
+        "password": "surfer"
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "galaxy"
+    }
+  ]
+}

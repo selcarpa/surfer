@@ -11,6 +11,7 @@ data class Odor(
     var redirectHost: String? = null,
     var redirectPort: Int? = null,
     val fromChannel: String,
+    //todo takes no effect
     var notDns: Boolean = false,
     var transmissionTrans: Boolean = false,
 ) {

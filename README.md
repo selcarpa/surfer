@@ -108,22 +108,7 @@ java -jar surfer.jar -c=config.json
 
 ```json5
 {
-  protocol: "galaxy",
-  //optional
-  outboundStreamBy: {
-    //http and socks5 are supported now
-    type: "http",
-    //when outboundStreamBy.type is http, this field is required
-    httpOutboundSetting: {
-      host: "127.0.0.1",
-      port: 8080
-    },
-    //when outboundStreamBy.type is socks5, this field is required
-    sock5OutboundSetting: {
-      host: "127.0.0.1",
-      port: 8080
-    }
-  }
+  protocol: "galaxy"
 }
 ```
 
