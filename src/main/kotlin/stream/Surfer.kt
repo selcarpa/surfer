@@ -101,36 +101,42 @@ private fun outbound(
         return galaxy(connectListener, odor, eventLoopGroup)
     }
     return when (Protocol.valueOfOrNull(outbound.outboundStreamBy.type)) {
-        Protocol.WSS ->  {
+        Protocol.WSS -> {
             odor.notDns = true
             odor.redirectPort = outbound.outboundStreamBy.wsOutboundSetting!!.port
             odor.redirectHost = outbound.outboundStreamBy.wsOutboundSetting.host
             stream(connectListener, outbound, eventLoopGroup, odor, Protocol.WSS)
         }
-        Protocol.WS ->   {
+
+        Protocol.WS -> {
             odor.notDns = true
             odor.redirectPort = outbound.outboundStreamBy.wsOutboundSetting!!.port
             odor.redirectHost = outbound.outboundStreamBy.wsOutboundSetting.host
             stream(connectListener, outbound, eventLoopGroup, odor, Protocol.WS)
         }
+
         Protocol.TCP -> {
             odor.notDns = true
             odor.redirectPort = outbound.outboundStreamBy.tcpOutboundSetting!!.port
             odor.redirectHost = outbound.outboundStreamBy.tcpOutboundSetting.host
             stream(connectListener, outbound, eventLoopGroup, odor, Protocol.TCP)
         }
-        Protocol.TLS ->  {
+
+        Protocol.TLS -> {
             odor.notDns = true
             odor.redirectPort = outbound.outboundStreamBy.tcpOutboundSetting!!.port
             odor.redirectHost = outbound.outboundStreamBy.tcpOutboundSetting.host
             stream(connectListener, outbound, eventLoopGroup, odor, Protocol.TLS)
         }
+
         Protocol.SOCKS5 -> socks5Stream(
             connectListener, outbound.outboundStreamBy.sock5OutboundSetting!!, eventLoopGroup, odor
         )
+
         Protocol.HTTP -> httpStream(
             connectListener, outbound.outboundStreamBy.httpOutboundSetting!!, eventLoopGroup, odor
         )
+
         else -> {
             logger.error { "stream type ${outbound.outboundStreamBy.type} not supported" }
         }

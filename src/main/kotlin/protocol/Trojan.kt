@@ -19,7 +19,6 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.ReferenceCountUtil
-import model.RELAY_HANDLER_NAME
 import model.TROJAN_PROXY_OUTBOUND
 import model.config.Inbound
 import model.config.Outbound
@@ -32,7 +31,6 @@ import model.protocol.TrojanRequest
 import mu.KotlinLogging
 import rule.resolveOutbound
 import stream.RelayAndOutboundOp
-import stream.RelayInboundHandler
 import stream.WebsocketDuplexHandler
 import stream.relayAndOutbound
 import utils.ChannelUtils
@@ -134,6 +132,8 @@ class TrojanOutboundHandler(
     private val trojanRequest: TrojanRequest
 ) : ChannelDuplexHandler() {
 
+    private var firstPackage = true
+
     constructor(
         outbound: Outbound, odor: Odor
     ) : this(
@@ -146,62 +146,21 @@ class TrojanOutboundHandler(
     )
 
     override fun write(ctx: ChannelHandlerContext?, msg: Any?, promise: ChannelPromise?) {
+        if (!firstPackage) {
+            super.write(ctx, msg, promise)
+            return
+        }
         if (msg is ByteBuf) {
             val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
             ReferenceCountUtil.release(msg)
             val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
+            firstPackage=false
             super.write(ctx, trojanByteBuf, promise)
             return
         }
         super.write(ctx, msg, promise)
     }
 
-
-}
-
-class TrojanRelayInboundHandler(
-    private val relayChannel: Channel,
-    private val trojanSetting: TrojanSetting,
-    private val trojanRequest: TrojanRequest,
-    inActiveCallBack: () -> Unit = {},
-) : RelayInboundHandler(relayChannel, inActiveCallBack) {
-    companion object {
-        private val logger = KotlinLogging.logger {}
-    }
-
-    constructor(
-        outboundChannel: Channel, outbound: Outbound, odor: Odor
-    ) : this(
-        outboundChannel, outbound.trojanSetting!!, TrojanRequest(
-            Socks5CommandType.CONNECT.byteValue(),
-            odor.addressType().byteValue(),
-            odor.host,
-            odor.port
-        )
-    )
-
-    /**
-     * Trojan protocol only need package once, then send origin data directly
-     */
-
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        when (msg) {
-            is ByteBuf -> {
-                val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
-                ReferenceCountUtil.release(msg)
-                val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
-                super.channelRead(ctx, trojanByteBuf)
-
-                ctx.channel().pipeline().remove(RELAY_HANDLER_NAME)
-                ctx.channel().pipeline().addLast(RELAY_HANDLER_NAME, RelayInboundHandler(relayChannel))
-            }
-
-            else -> {
-                logger.error("TrojanRelayHandler receive unknown message:${msg.javaClass.name}")
-                super.channelRead(ctx, msg)
-            }
-        }
-    }
 
 }
 
@@ -235,7 +194,6 @@ class TrojanProxy(
         ),
         streamBy
     )
-
     private val trojanOutboundHandler = TrojanOutboundHandler(trojanSetting, trojanRequest)
     override fun protocol(): String {
         return Protocol.TROJAN.name
@@ -267,6 +225,15 @@ class TrojanProxy(
         }
 
         p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
+        p.addLast(AutoSuccessHandler {
+            val proxyHandlerClass = ProxyHandler::class.java
+            proxyHandlerClass.declaredMethods.forEach {
+                if (it.name == "setConnectSuccess") {
+                    it.isAccessible = true
+                    it.invoke(this)
+                }
+            }
+        })
 
     }
 
@@ -310,6 +277,8 @@ class TrojanProxy(
         )
     }
 
+
+
     /**
      * tcp stream needn't any handler
      */
@@ -318,7 +287,7 @@ class TrojanProxy(
     }
 
     override fun removeEncoder(ctx: ChannelHandlerContext) {
-        ctx.pipeline().remove(TROJAN_PROXY_OUTBOUND)
+        //ignored
     }
 
     override fun removeDecoder(ctx: ChannelHandlerContext) {
@@ -333,4 +302,12 @@ class TrojanProxy(
         return true
     }
 
+
+}
+
+class AutoSuccessHandler(private val exec:()->Unit): ChannelInboundHandlerAdapter() {
+    override fun channelActive(ctx: ChannelHandlerContext) {
+        exec()
+        super.channelActive(ctx)
+    }
 }

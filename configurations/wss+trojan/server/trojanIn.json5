@@ -9,7 +9,7 @@
           "path": "/surfer"//websocket path
         }
       },
-      "trojanSettings": [
+      "trojanSetting": [
         {
           "password": ""//any String
         }
