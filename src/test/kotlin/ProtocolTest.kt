@@ -12,67 +12,120 @@ import io.netty.handler.logging.LoggingHandler
 import io.netty.util.CharsetUtil
 import model.config.Config
 import netty.NettyServer
-import java.net.ServerSocket
-import kotlin.test.Test
+import org.junit.jupiter.api.BeforeAll
+import org.junit.jupiter.api.Test
+import java.io.IOException
+import java.net.*
+import java.net.http.HttpClient
+import java.net.http.HttpResponse
 
 
 class ProtocolTest {
-    var port: Int = 0
+
+
+    companion object {
+        var httpSnoopServerPort: Int = 0
+
+        @BeforeAll
+        @JvmStatic
+        fun choosePort() {
+            val serverSocket = ServerSocket(0)
+
+            val port = serverSocket.getLocalPort()
+
+            serverSocket.close()
+
+            httpSnoopServerPort = port
+        }
+
+        @BeforeAll
+        @JvmStatic
+        fun startDestinationServer() {
+            Thread{
+                // Configure the server.
+                val bossGroup: EventLoopGroup = NioEventLoopGroup(1)
+                val workerGroup: EventLoopGroup = NioEventLoopGroup()
+                try {
+                    val b = ServerBootstrap()
+                    b.group(bossGroup, workerGroup).channel(NioServerSocketChannel::class.java)
+                        .handler(LoggingHandler(LogLevel.INFO)).childHandler(object : ChannelInitializer<SocketChannel>() {
+                            override fun initChannel(ch: SocketChannel) {
+                                val p = ch.pipeline()
+                                p.addLast(HttpRequestDecoder())
+                                p.addLast(HttpResponseEncoder())
+                                p.addLast(HttpSnoopServerHandler())
+                            }
+
+                        });
+                    val ch: Channel = b.bind(httpSnoopServerPort).sync().channel()
+                    Runtime.getRuntime().addShutdownHook(Thread({
+                        bossGroup.shutdownGracefully()
+                        workerGroup.shutdownGracefully()
+                    }, "Server Shutdown Thread"))
+                    ch.closeFuture().sync()
+                } finally {
+                    bossGroup.shutdownGracefully()
+                    workerGroup.shutdownGracefully()
+                }
+            }.start()
+        }
+
+        @BeforeAll
+        @JvmStatic
+        fun startMainServer() {
+            Config.ConfigurationUrl = "classpath:/MainTest.json5"
+            NettyServer.start()
+        }
+
+    }
 
     @Test
-    fun mainTest() {
-        choosePort()
-        startMainServer()
-        Thread{
-            startDestinationServer()
+    fun baseRequest(){
+        httpRequest(null)
+    }
+
+    @Test
+    fun viaHttpProxy() {
+        val proxy = Proxy(Proxy.Type.HTTP, InetSocketAddress("127.0.0.1", 14272))
+        httpRequest(proxy)
+    }
+
+    @Test
+    fun viaSocks5Proxy() {
+        val proxy = Proxy(Proxy.Type.SOCKS, InetSocketAddress("127.0.0.1", 14270))
+        httpRequest(proxy)
+    }
+
+    private fun httpRequest(proxy: Proxy?) {
+        val httpClient = if (proxy!=null){
+            HttpClient.newBuilder().proxy(object : ProxySelector() {
+                override fun select(uri: URI?): MutableList<Proxy> {
+                    return mutableListOf(proxy)
+                }
+
+                override fun connectFailed(uri: URI?, sa: SocketAddress?, ioe: IOException?) {
+                    throw ioe!!
+                }
+            }).build()
+        }else{
+            HttpClient.newBuilder().build()
         }
-    }
+        val url = "http://127.0.0.1:${httpSnoopServerPort}"
 
-    private fun choosePort() {
-        val serverSocket = ServerSocket(0)
+        val request: java.net.http.HttpRequest? =
+            java.net.http.HttpRequest.newBuilder().uri(URI.create(url)).GET().build()
 
-        val port = serverSocket.getLocalPort()
-
-        serverSocket.close()
-
-        this.port = port
-    }
-
-    private fun startDestinationServer() {
-        // Configure the server.
-
-        // Configure the server.
-        val bossGroup: EventLoopGroup = NioEventLoopGroup(1)
-        val workerGroup: EventLoopGroup = NioEventLoopGroup()
         try {
-            val b = ServerBootstrap()
-            b.group(bossGroup, workerGroup)
-                .channel(NioServerSocketChannel::class.java)
-                .handler(LoggingHandler(LogLevel.INFO))
-                .childHandler(object : ChannelInitializer<SocketChannel>() {
-                    override fun initChannel(ch: SocketChannel) {
-                        val p = ch.pipeline()
-                        p.addLast(HttpRequestDecoder())
-                        p.addLast(HttpResponseEncoder())
-                        p.addLast(HttpSnoopServerHandler())
-                    }
-
-                });
-            val ch: Channel = b.bind(port).sync().channel()
-            Runtime.getRuntime().addShutdownHook(Thread({
-                bossGroup.shutdownGracefully()
-                workerGroup.shutdownGracefully()
-            }, "Server Shutdown Thread"))
-            ch.closeFuture().sync()
-        } finally {
-            bossGroup.shutdownGracefully()
-            workerGroup.shutdownGracefully()
+            val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
+            val statusCode: Int = response.statusCode()
+            val responseBody: String = response.body()
+            println("Status Code: $statusCode")
+            println("Response Body: $responseBody")
+        } catch (e: IOException) {
+            e.printStackTrace()
+        } catch (e: InterruptedException) {
+            e.printStackTrace()
         }
-    }
-
-    private fun startMainServer() {
-        Config.ConfigurationUrl = "classpath:/MainTest.json5"
-        NettyServer.start()
     }
 
 }
@@ -187,6 +240,7 @@ class HttpSnoopServerHandler : SimpleChannelInboundHandler<Any?>() {
         return keepAlive
     }
 
+    @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         cause.printStackTrace()
         ctx.close()

@@ -6,6 +6,7 @@ import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.*
+import io.netty.util.ReferenceCountUtil
 import model.config.Inbound
 import model.protocol.Odor
 import model.protocol.Protocol
@@ -16,13 +17,13 @@ import stream.relayAndOutbound
 import java.net.URI
 
 
-class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<HttpRequest>() {
+class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<HttpRequest>(false) {
     companion object {
         private val logger = KotlinLogging.logger {}
     }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
-        logger.warn { "[${ctx.channel().id().asShortText()}] channel inactive"}
+        logger.warn { "[${ctx.channel().id().asShortText()}] channel inactive" }
         super.channelInactive(ctx)
     }
 
@@ -83,7 +84,6 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
                     }
                 }
             )
-//            ReferenceCountUtil.release(encoded)
         }
 
     }
@@ -107,8 +107,10 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
             desProtocol = Protocol.TCP,
             fromChannel = originCTX.channel().id().asShortText()
         )
+        val version = request.protocolVersion()
+        ReferenceCountUtil.release(request)
 
-        val resolveOutbound = resolveOutbound(inbound,odor)
+        val resolveOutbound = resolveOutbound(inbound, odor)
         resolveOutbound.ifPresent { outbound ->
             relayAndOutbound(
                 RelayAndOutboundOp(
@@ -120,7 +122,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
                         //write Connection Established
                         originCTX.writeAndFlush(
                             DefaultHttpResponse(
-                                request.protocolVersion(),
+                                version,
                                 HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
                             )
                         ).also {
