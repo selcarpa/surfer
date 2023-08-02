@@ -183,7 +183,9 @@ class TrojanProxy(
     private val streamBy: Protocol,
 ) : ProxyHandler(socketAddress) {
     companion object{
-        val setConnectSuccess=ProxyHandler::class.java.declaredMethods.find { it.name=="setConnectSuccess" }!!
+        val setConnectSuccess=ProxyHandler::class.java.declaredMethods.find { it.name=="setConnectSuccess" }!!.also {
+            it.isAccessible=true
+        }
     }
     constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
