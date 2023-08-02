@@ -182,6 +182,9 @@ class TrojanProxy(
     trojanRequest: TrojanRequest,
     private val streamBy: Protocol,
 ) : ProxyHandler(socketAddress) {
+    companion object{
+        val setConnectSuccess=ProxyHandler::class.java.declaredMethods.find { it.name=="setConnectSuccess" }!!
+    }
     constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
         outbound.outboundStreamBy,
@@ -230,16 +233,7 @@ class TrojanProxy(
         }
 
         p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-        p.addLast("AutoSuccessHandler", AutoSuccessHandler {
-            val proxyHandlerClass = ProxyHandler::class.java
-            proxyHandlerClass.declaredMethods.forEach {
-                if (it.name == "setConnectSuccess") {
-                    it.isAccessible = true
-                    it.invoke(this)
-                }
-            }
-        })
-
+        p.addLast("AutoSuccessHandler", AutoSuccessHandler { setConnectSuccess.invoke(this) })
     }
 
     /**
