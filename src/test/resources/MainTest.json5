@@ -1,4 +1,7 @@
 {
+  log: {
+    level: "trace"
+  },
   "inbounds": [
     {
       "port": 14270,

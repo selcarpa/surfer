@@ -20,7 +20,7 @@ object MainKt {
 
         loadLogConfig()
 
-        NettyServer.start()
+        NettyServer.start(null)
         logger.info("『时间』会带来喜悦。")
     }
 

@@ -1,30 +1,40 @@
+import io.netty.bootstrap.Bootstrap
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
+import io.netty.channel.socket.nio.NioDatagramChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder
 import io.netty.handler.codec.http.cookie.ServerCookieEncoder
+import io.netty.handler.logging.ByteBufFormat
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.util.CharsetUtil
 import model.config.Config
 import netty.NettyServer
+import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import java.io.IOException
 import java.net.*
 import java.net.http.HttpClient
 import java.net.http.HttpResponse
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.concurrent.CountDownLatch
 
 
-class ProtocolTest {
+class MainTest {
 
 
     companion object {
-        var httpSnoopServerPort: Int = 0
+        var httpServerPort: Int = 0
+        private var udpEchoServerPort: Int = 0
+        private val bossGroup: EventLoopGroup = NioEventLoopGroup(1)
+        private val workerGroup: EventLoopGroup = NioEventLoopGroup()
 
         @BeforeAll
         @JvmStatic
@@ -35,52 +45,102 @@ class ProtocolTest {
 
             serverSocket.close()
 
-            httpSnoopServerPort = port
+            httpServerPort = port
+            println("httpServerPort:$httpServerPort")
         }
 
         @BeforeAll
         @JvmStatic
-        fun startDestinationServer() {
-            Thread{
-                // Configure the server.
-                val bossGroup: EventLoopGroup = NioEventLoopGroup(1)
-                val workerGroup: EventLoopGroup = NioEventLoopGroup()
-                try {
-                    val b = ServerBootstrap()
-                    b.group(bossGroup, workerGroup).channel(NioServerSocketChannel::class.java)
-                        .handler(LoggingHandler(LogLevel.INFO)).childHandler(object : ChannelInitializer<SocketChannel>() {
-                            override fun initChannel(ch: SocketChannel) {
-                                val p = ch.pipeline()
-                                p.addLast(HttpRequestDecoder())
-                                p.addLast(HttpResponseEncoder())
-                                p.addLast(HttpSnoopServerHandler())
-                            }
+        fun startHttpServer() {
+            val countDownLatch=CountDownLatch(1)
+            Thread {
+                val b = ServerBootstrap()
+                b.group(bossGroup, workerGroup).channel(NioServerSocketChannel::class.java)
+                    .handler(LoggingHandler(LogLevel.INFO))
+                    .childHandler(object : ChannelInitializer<SocketChannel>() {
+                        override fun initChannel(ch: SocketChannel) {
+                            val p = ch.pipeline()
+                            p.addLast(HttpRequestDecoder())
+                            p.addLast(HttpResponseEncoder())
+                            p.addLast(HttpSnoopServerHandler())
+                        }
 
-                        });
-                    val ch: Channel = b.bind(httpSnoopServerPort).sync().channel()
-                    Runtime.getRuntime().addShutdownHook(Thread({
-                        bossGroup.shutdownGracefully()
-                        workerGroup.shutdownGracefully()
-                    }, "Server Shutdown Thread"))
-                    ch.closeFuture().sync()
-                } finally {
+                    });
+                val ch: Channel = b.bind(httpServerPort).addListener {
+                    countDownLatch.countDown()
+                }.sync().channel()
+                Runtime.getRuntime().addShutdownHook(Thread({
                     bossGroup.shutdownGracefully()
                     workerGroup.shutdownGracefully()
-                }
+                }, "Server Shutdown Thread"))
+                ch.closeFuture().sync()
             }.start()
+            countDownLatch.await()
         }
 
         @BeforeAll
         @JvmStatic
-        fun startMainServer() {
+        fun startUdpEchoServer() {
+            val countDownLatch=CountDownLatch(1)
+            Thread {
+                Bootstrap().group(workerGroup).channel(NioDatagramChannel::class.java)
+                    .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+                    .handler(object : SimpleChannelInboundHandler<io.netty.channel.socket.DatagramPacket>() {
+                        override fun channelRead0(
+                            ctx: ChannelHandlerContext,
+                            msg: io.netty.channel.socket.DatagramPacket
+                        ) {
+                            //print
+
+                            val srcMsg = "${
+                                DateTimeFormatter.ISO_DATE_TIME.format(
+                                    LocalDateTime.now()
+                                )
+                            }, ${msg.sender()}, ${msg.content().toString(CharsetUtil.UTF_8)}"
+                            println("receive：$srcMsg")
+                            //echo
+                            ctx.writeAndFlush(
+                                io.netty.channel.socket.DatagramPacket(
+                                    Unpooled.copiedBuffer(srcMsg, CharsetUtil.UTF_8), msg.sender()
+                                )
+                            ).sync()
+                        }
+                    }).also {
+                        it.bind(udpEchoServerPort).addListener {
+                            countDownLatch.countDown()
+                            udpEchoServerPort = ((it as DefaultChannelPromise).channel().localAddress() as InetSocketAddress).port
+                        }.sync().channel().closeFuture().await()
+                    }
+            }.start()
+            countDownLatch.await()
+        }
+
+        @BeforeAll
+        @JvmStatic
+        fun startSurferServer() {
             Config.ConfigurationUrl = "classpath:/MainTest.json5"
-            NettyServer.start()
+            val countDownLatch = CountDownLatch(Config.Configuration.inbounds.size)
+            Thread{
+                NettyServer.start(countDownLatch)
+            }.start()
+            countDownLatch.await()
+        }
+
+        @AfterAll
+        @JvmStatic
+        fun close() {
+            if (!(bossGroup.isShutdown || bossGroup.isShuttingDown)) {
+                bossGroup.shutdownGracefully()
+            }
+            if (!(workerGroup.isShutdown || workerGroup.isShuttingDown)) {
+                workerGroup.shutdownGracefully()
+            }
         }
 
     }
 
     @Test
-    fun baseRequest(){
+    fun baseRequest() {
         httpRequest(null)
     }
 
@@ -96,8 +156,13 @@ class ProtocolTest {
         httpRequest(proxy)
     }
 
+    @Test
+    fun udpViaSocks5Proxy() {
+
+    }
+
     private fun httpRequest(proxy: Proxy?) {
-        val httpClient = if (proxy!=null){
+        val httpClient = if (proxy != null) {
             HttpClient.newBuilder().proxy(object : ProxySelector() {
                 override fun select(uri: URI?): MutableList<Proxy> {
                     return mutableListOf(proxy)
@@ -107,10 +172,10 @@ class ProtocolTest {
                     throw ioe!!
                 }
             }).build()
-        }else{
+        } else {
             HttpClient.newBuilder().build()
         }
-        val url = "http://127.0.0.1:${httpSnoopServerPort}"
+        val url = "http://127.0.0.1:${httpServerPort}"
 
         val request: java.net.http.HttpRequest? =
             java.net.http.HttpRequest.newBuilder().uri(URI.create(url)).GET().build()
@@ -162,7 +227,7 @@ class HttpSnoopServerHandler : SimpleChannelInboundHandler<Any?>() {
             }
             val queryStringDecoder = QueryStringDecoder(request.uri())
             val params = queryStringDecoder.parameters()
-            if (!params.isEmpty()) {
+            if (params.isNotEmpty()) {
                 for ((key, vals) in params) {
                     for (`val` in vals) {
                         buf.append("PARAM: ").append(key).append(" = ").append(`val`).append("\r\n")

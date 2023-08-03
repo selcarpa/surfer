@@ -1,7 +1,6 @@
 {
   log: {
-    level: "info",
-    fileName: "info"
+    level: "info"
   },
   "inbounds": [
     {

@@ -19,6 +19,7 @@ import model.config.Inbound
 import model.protocol.Protocol
 import mu.KotlinLogging
 import java.util.*
+import java.util.concurrent.CountDownLatch
 import kotlin.system.exitProcess
 
 /**
@@ -32,7 +33,7 @@ object NettyServer {
     private val workerGroup: EventLoopGroup =
         NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
 
-    fun start() {
+    fun start(countDownLatch: CountDownLatch?) {
 
         var tcpBind = false
         Optional.ofNullable(Configuration.inbounds).ifPresent {
@@ -47,6 +48,7 @@ object NettyServer {
                     tcpBootstrap.bind(inbound.port).addListener { future ->
                         if (future.isSuccess) {
                             logger.info("${inbound.protocol} bind ${inbound.port} success")
+                            countDownLatch?.countDown()
                         } else {
                             logger.error("bind ${inbound.port} fail, reason:{}", future.cause().message)
                             exitProcess(1)
@@ -72,6 +74,7 @@ object NettyServer {
                     ukcpServerBootstrap.bind(inbound.port).addListener { future ->
                         if (future.isSuccess) {
                             logger.info("${inbound.protocol} bind ${inbound.port} success")
+                            countDownLatch?.countDown()
                         } else {
                             logger.error("bind ${inbound.port} fail, reason:{}", future.cause().message)
                             exitProcess(1)
