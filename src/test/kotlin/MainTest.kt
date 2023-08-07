@@ -96,7 +96,7 @@ class MainTest {
                                     LocalDateTime.now()
                                 )
                             }, ${msg.sender()}, ${msg.content().toString(CharsetUtil.UTF_8)}"
-                            println("receive：$srcMsg")
+                            logger.info("receive：$srcMsg")
                             //echo
                             ctx.writeAndFlush(
                                 io.netty.channel.socket.DatagramPacket(
@@ -186,8 +186,8 @@ class MainTest {
             val response = httpClient.send(request, HttpResponse.BodyHandlers.ofString())
             val statusCode: Int = response.statusCode()
             val responseBody: String = response.body()
-            println("Status Code: $statusCode")
-            println("Response Body: $responseBody")
+            logger.info("Status Code: $statusCode")
+            logger.info("Response Body: $responseBody")
         } catch (e: IOException) {
             e.printStackTrace()
         } catch (e: InterruptedException) {

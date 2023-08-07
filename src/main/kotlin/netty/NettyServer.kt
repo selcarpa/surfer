@@ -33,6 +33,10 @@ object NettyServer {
     private val workerGroup: EventLoopGroup =
         NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
 
+    /**
+     * start netty server
+     * @param countDownLatch to wake up the blocked calling thread
+     */
     fun start(countDownLatch: CountDownLatch?) {
 
         var tcpBind = false

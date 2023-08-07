@@ -4,9 +4,7 @@ package stream
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
-import io.netty.channel.nio.AbstractNioByteChannel
 import io.netty.channel.nio.NioEventLoopGroup
-import io.netty.channel.socket.DatagramPacket
 import io.netty.channel.socket.nio.NioDatagramChannel
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.logging.ByteBufFormat
@@ -318,7 +316,7 @@ class ChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuple
 /**
  * relay from client channel to server
  */
-open class RelayInboundHandler(private val relayChannel: Channel, private val inActiveCallBack: () -> Unit = {}) :
+class RelayInboundHandler(private val relayChannel: Channel, private val inActiveCallBack: () -> Unit = {}) :
     ChannelInboundHandlerAdapter() {
     companion object {
         private val logger = KotlinLogging.logger {}
@@ -330,28 +328,6 @@ open class RelayInboundHandler(private val relayChannel: Channel, private val in
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (relayChannel.isActive) {
-
-            if (msg is DatagramPacket && relayChannel is AbstractNioByteChannel) {
-                logger.trace(
-                    "relay inbound read from [{}] pipeline handlers:{}, to [{}] pipeline handlers:{}, write message:{}",
-                    ctx.channel().id().asShortText(),
-                    ctx.channel().pipeline().names(),
-                    relayChannel.id().asShortText(),
-                    relayChannel.pipeline().names(),
-                    msg.javaClass.name
-                )
-                relayChannel.writeAndFlush(msg.content()).addListener(ChannelFutureListener {
-                    if (!it.isSuccess) {
-                        logger.error(
-                            "relay inbound write message:${msg.javaClass.name} to [${
-                                relayChannel.id().asShortText()
-                            }] failed, cause: ${it.cause().message}", it.cause()
-                        )
-                    }
-                })
-                return
-            }
-
             logger.trace(
                 "relay inbound read from [{}] pipeline handlers:{}, to [{}] pipeline handlers:{}, write message:{}",
                 ctx.channel().id().asShortText(),
