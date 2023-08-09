@@ -1,9 +1,9 @@
-
 import io.netty.bootstrap.Bootstrap
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
+import io.netty.channel.socket.DatagramPacket
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioDatagramChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
@@ -12,6 +12,7 @@ import io.netty.handler.codec.http.HttpResponseEncoder
 import io.netty.handler.logging.ByteBufFormat
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
+import io.netty.handler.proxy.Socks5ProxyHandler
 import io.netty.util.CharsetUtil
 import model.config.Config
 import mu.KotlinLogging
@@ -54,8 +55,7 @@ class MainTest {
             Thread {
                 val b = ServerBootstrap()
                 b.group(bossGroup, workerGroup).channel(NioServerSocketChannel::class.java)
-                    .handler(LoggingHandler(LogLevel.DEBUG))
-                    .childHandler(object : ChannelInitializer<SocketChannel>() {
+                    .handler(LoggingHandler(LogLevel.DEBUG)).childHandler(object : ChannelInitializer<SocketChannel>() {
                         override fun initChannel(ch: SocketChannel) {
                             val p = ch.pipeline()
                             p.addLast(HttpRequestDecoder())
@@ -86,8 +86,7 @@ class MainTest {
                     .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
                     .handler(object : SimpleChannelInboundHandler<io.netty.channel.socket.DatagramPacket>() {
                         override fun channelRead0(
-                            ctx: ChannelHandlerContext,
-                            msg: io.netty.channel.socket.DatagramPacket
+                            ctx: ChannelHandlerContext, msg: io.netty.channel.socket.DatagramPacket
                         ) {
                             //print
 
@@ -159,9 +158,45 @@ class MainTest {
     }
 
     @Test
-    fun udpViaSocks5Proxy() {
-
+    fun baseUdpRequest() {
+        udpRequest()
     }
+
+    @Test
+    fun udpViaSocks5Proxy() {
+        udpRequest(socksHandler())
+    }
+
+    private fun udpRequest(socks5ProxyHandler: Socks5ProxyHandler? = null) {
+        Bootstrap().group(workerGroup).channel(NioDatagramChannel::class.java)
+            .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+            .handler(object : ChannelInitializer<Channel>() {
+                override fun initChannel(ch: Channel) {
+                    ch.pipeline().addLast(socks5ProxyHandler)
+                    ch.pipeline()
+                        .addLast(object : SimpleChannelInboundHandler<DatagramPacket>() {
+                            override fun channelRead0(
+                                ctx: ChannelHandlerContext, msg: DatagramPacket
+                            ) {
+                                //print
+
+                                val srcMsg = "${
+                                    DateTimeFormatter.ISO_DATE_TIME.format(
+                                        LocalDateTime.now()
+                                    )
+                                }, ${msg.sender()}, ${msg.content().toString(CharsetUtil.UTF_8)}"
+                                logger.info("receive：$srcMsg")
+                            }
+                        })
+                }
+
+            }).also {
+                it.connect(InetSocketAddress("127.0.0.1", udpEchoServerPort)).addListener {
+                }.sync().channel().closeFuture().await()
+            }
+    }
+
+    private fun socksHandler(): Socks5ProxyHandler = Socks5ProxyHandler(InetSocketAddress("127.0.0.1", 14270))
 
     private fun httpRequest(proxy: Proxy?) {
         val httpClient = if (proxy != null) {
