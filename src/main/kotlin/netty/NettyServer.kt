@@ -54,7 +54,7 @@ object NettyServer {
                             logger.info("${inbound.protocol} bind ${inbound.port} success")
                             countDownLatch?.countDown()
                         } else {
-                            logger.error("bind ${inbound.port} fail, reason:{}", future.cause().message)
+                            logger.error("bind ${inbound.port} fail, reason:${future.cause().message}")
                             exitProcess(1)
                         }
                     }
@@ -80,7 +80,7 @@ object NettyServer {
                             logger.info("${inbound.protocol} bind ${inbound.port} success")
                             countDownLatch?.countDown()
                         } else {
-                            logger.error("bind ${inbound.port} fail, reason:{}", future.cause().message)
+                            logger.error("bind ${inbound.port} fail, reason:${future.cause().message}")
                             exitProcess(1)
                         }
                     }

@@ -17,7 +17,6 @@ import stream.RelayAndOutboundOp
 import stream.relayAndOutbound
 import utils.ChannelUtils
 
-@Sharable
 class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
     companion object {
         private val logger = KotlinLogging.logger {}
