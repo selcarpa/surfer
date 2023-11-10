@@ -21,10 +21,10 @@ jobs:
         distribution: 'temurin'
         server-id: github
 
-    - name: Build with Gradle
-      uses: gradle/gradle-build-action@v2
-      with:
-        arguments: build
+    - name: Execute with Gradle
+      shell: bash
+      run: |
+        ./gradlew build
 
     - uses: ncipollo/release-action@v1
       with:
