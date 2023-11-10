@@ -14,7 +14,7 @@ repositories {
 }
 
 dependencies {
-    implementation("io.netty:netty-all:4.1.96.Final")
+    implementation("io.netty:netty-all:4.1.101.Final")
     implementation("io.jpower.kcp:kcp-netty:1.5.0")
 
     //ssl server support
