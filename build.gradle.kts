@@ -31,8 +31,10 @@ dependencies {
     testImplementation(kotlin("test"))
 }
 
-tasks.test {
-    useJUnitPlatform()
+if (properties["release"]!="true"){
+    tasks.test {
+        useJUnitPlatform()
+    }
 }
 
 idea {
