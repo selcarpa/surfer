@@ -1,3 +1,5 @@
+val taskGroupName = "surfer"
+
 plugins {
     kotlin("jvm") version "1.9.0"
     kotlin("plugin.serialization") version "1.8.21"
@@ -47,5 +49,50 @@ kotlin {
 
 application {
     mainClass.set("MainKt")
+}
+tasks.register("github") {
+    group = taskGroupName
+    dependsOn(tasks.getByName("build"))
+    dependsOn(tasks.getByName("jvmDockerBuildx"))
+}
+
+tasks.register<Exec>("jvmDockerBuildx") {
+    group = taskGroupName
+    dependsOn(tasks.getByName("build"))
+    if(properties["release"]=="true"){
+        dependsOn(tasks.getByName("dockerLogin"))
+    }
+    val arguments= listOfNotNull(
+        "docker",
+        "buildx",
+        "build",
+        "--platform",
+        "linux/amd64,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x,windows/amd64",
+        "-t",
+        "selcarpa/surfer:$version",
+        if(properties["release"]=="true"){
+            "--push"
+        }else{
+            null
+        },
+        "-t",
+        "selcarpa/surfer:latest",
+        "."
+    )
+    commandLine(
+        arguments
+    )
+}
+
+tasks.register<Exec>("dockerLogin") {
+    group = taskGroupName
+    commandLine(
+        "docker",
+        "login",
+        "-u",
+        "${properties["dockerUserName"]}",
+        "-p",
+        "${properties["dockerPassword"]}"
+    )
 }
 
