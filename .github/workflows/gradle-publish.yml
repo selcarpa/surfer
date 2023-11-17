@@ -23,8 +23,11 @@ jobs:
 
     - name: Execute with Gradle
       shell: bash
+      env:
+        DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+        DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
       run: |
-        ./gradlew build
+        ./gradlew -PdockerUserName="$DOCKER_USERNAME" -PdockerPassword="$DOCKER_PASSWORD" -Prelease="true" github
 
     - uses: ncipollo/release-action@v1
       with:

@@ -37,7 +37,7 @@ object NettyServer {
      * start netty server
      * @param countDownLatch to wake up the blocked calling thread
      */
-    fun start(countDownLatch: CountDownLatch?) {
+    fun start(countDownLatch: CountDownLatch? = null) {
 
         var tcpBind = false
         Optional.ofNullable(Configuration.inbounds).ifPresent {

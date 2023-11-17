@@ -13,15 +13,15 @@ object MainKt {
             if (it.startsWith("-c=")) {
                 ConfigurationUrl = it.replace("-c=", "")
             }
-            if(it == "-memstat"){
+            if (it == "-memstat") {
                 startMemoryStatisticPrint()
             }
         }
 
         loadLogConfig()
 
-        NettyServer.start(null)
-        logger.info("『时间』会带来喜悦。")
+        NettyServer.start()
+        logger.info("【注意事项】 本品不能代替药物。")
     }
 
 
