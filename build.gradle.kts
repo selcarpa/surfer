@@ -1,7 +1,7 @@
 val taskGroupName = "surfer"
 
 plugins {
-    kotlin("jvm") version "1.9.0"
+    kotlin("jvm") version "1.9.20"
     kotlin("plugin.serialization") version "1.8.21"
     application
     id("com.github.johnrengelman.shadow") version "8.1.1"
