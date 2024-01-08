@@ -11,6 +11,8 @@ import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler
 import io.netty.handler.codec.socksx.SocksPortUnificationServerHandler
+import io.netty.handler.logging.LogLevel
+import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.stream.ChunkedWriteHandler
@@ -43,6 +45,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
         val portInboundMap =
             Configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
         val inbound = portInboundMap[localAddress.port]
+        ch.pipeline().addFirst(LoggingHandler(LogLevel.TRACE))
         //todo: set idle timeout, and close channel
         ch.pipeline().addFirst(IdleStateHandler(300, 300, 300))
         ch.pipeline().addFirst(IdleCloseHandler())
@@ -139,7 +142,8 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
                 tlsInboundSetting.password
             ).build()
         } else {
-            SslContextBuilder.forServer(File(tlsInboundSetting.keyCertChainFile), File(tlsInboundSetting.keyFile)).build()
+            SslContextBuilder.forServer(File(tlsInboundSetting.keyCertChainFile), File(tlsInboundSetting.keyFile))
+                .build()
         }
         ch.pipeline().addLast(
             sslCtx.newHandler(ch.alloc()),

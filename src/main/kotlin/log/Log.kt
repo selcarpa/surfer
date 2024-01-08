@@ -23,6 +23,7 @@ fun loadLogConfig() {
 
     // clear all appenders and present log instance
     val logCtx: LoggerContext = LoggerFactory.getILoggerFactory() as LoggerContext
+    //todo log context event listener not working
     val log = logCtx.getLogger(Logger.ROOT_LOGGER_NAME)
     log.detachAndStopAllAppenders()
     log.isAdditive = false
@@ -31,7 +32,7 @@ fun loadLogConfig() {
     // set log level
     log.level = LogLevel.by(logConfiguration.level).toLogBackLevel()
 
-    if (log.level== Level.OFF){
+    if (log.level == Level.OFF) {
         return
     }
 
@@ -60,15 +61,17 @@ fun loadLogConfig() {
         rollingFileAppender.name = "logFile"
         rollingFileAppender.encoder = logEncoder
         rollingFileAppender.isAppend = true
-        rollingFileAppender.file = "${logConfiguration.path.removeSuffix("/")}${File.separator}${logConfiguration.fileName.removePrefix("/")}.log"
+        rollingFileAppender.file =
+            "${logConfiguration.path.removeSuffix("/")}${File.separator}${logConfiguration.fileName.removePrefix("/")}.log"
 
         //init log rolling policy
         val logFilePolicy: SizeAndTimeBasedRollingPolicy<*> = SizeAndTimeBasedRollingPolicy<Any?>()
         logFilePolicy.context = logCtx
         logFilePolicy.setParent(rollingFileAppender)
-        logFilePolicy.fileNamePattern = "${logConfiguration.path.removeSuffix("/")}${File.separator}${logConfiguration.fileName.removePrefix("/")}-%d{yyyy-MM-dd}-%i.log.zip"
+        logFilePolicy.fileNamePattern =
+            "${logConfiguration.path.removeSuffix("/")}${File.separator}${logConfiguration.fileName.removePrefix("/")}-%d{yyyy-MM-dd}-%i.log.zip"
         logFilePolicy.maxHistory = logConfiguration.maxHistory
-        logFilePolicy.setMaxFileSize(FileSize.valueOf("50mb"))
+        logFilePolicy.setMaxFileSize(FileSize.valueOf(logConfiguration.maxFileSize))
         logFilePolicy.start()
 
         rollingFileAppender.rollingPolicy = logFilePolicy
@@ -79,7 +82,6 @@ fun loadLogConfig() {
         log.addAppender(rollingFileAppender as Appender<ILoggingEvent>)
     }
 
-    //todo log context event listener not working
 }
 
 

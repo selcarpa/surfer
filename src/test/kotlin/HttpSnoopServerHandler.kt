@@ -34,7 +34,7 @@ class HttpSnoopServerHandler : SimpleChannelInboundHandler<Any?>() {
             buf.append("REQUEST_URI: ").append(request.uri()).append("\r\n\r\n")
             val headers = request.headers()
             if (!headers.isEmpty) {
-                for ((key, value) in headers) {
+                headers.forEach { (key, value) ->
                     buf.append("HEADER: ").append(key).append(" = ").append(value).append("\r\n")
                 }
                 buf.append("\r\n")

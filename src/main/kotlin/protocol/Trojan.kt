@@ -167,13 +167,13 @@ class TrojanOutboundHandler(
 /**
  * convert ByteBuf to TrojanPackage
  */
-fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequest: TrojanRequest): TrojanPackage {
-    return TrojanPackage(
+fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequest: TrojanRequest): TrojanPackage =
+    TrojanPackage(
         Sha224Utils.encryptAndHex(SurferUtils.toUUid(trojanSetting.password).toString()),
         trojanRequest,
         ByteBufUtil.hexDump(msg)
     )
-}
+
 
 class TrojanProxy(
     private val socketAddress: InetSocketAddress,
@@ -182,11 +182,13 @@ class TrojanProxy(
     trojanRequest: TrojanRequest,
     private val streamBy: Protocol,
 ) : ProxyHandler(socketAddress) {
-    companion object{
-        val setConnectSuccess=ProxyHandler::class.java.declaredMethods.find { it.name=="setConnectSuccess" }!!.also {
-            it.isAccessible=true
-        }
+    companion object {
+        val setConnectSuccess =
+            ProxyHandler::class.java.declaredMethods.find { it.name == "setConnectSuccess" }!!.also {
+                it.isAccessible = true
+            }
     }
+
     constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
         outbound.outboundStreamBy,
@@ -283,6 +285,7 @@ class TrojanProxy(
     /**
      * tcp stream needn't any handler
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun addPreHandledTcp(ctx: ChannelHandlerContext) {
         //ignored
     }
