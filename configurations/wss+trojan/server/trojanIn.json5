@@ -9,11 +9,9 @@
           "path": "/surfer"//websocket path
         }
       },
-      "trojanSetting": [
-        {
-          "password": ""//any String
-        }
-      ]
+      "trojanSetting": {
+        "password": ""//any String
+      }
     }
   ],
   "outbounds": [
