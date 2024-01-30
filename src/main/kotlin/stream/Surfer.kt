@@ -94,7 +94,7 @@ private fun outbound(
         )
 
         Protocol.TROJAN -> {
-            stream(
+            trojanStream(
                 connectListener,
                 outbound,
                 eventLoopGroup,
@@ -142,7 +142,7 @@ fun setOdorRedirect(outbound: Outbound, odor: Odor) {
     }
 }
 
-private fun stream(
+private fun trojanStream(
     connectListener: FutureListener<Channel>,
     outbound: Outbound,
     eventLoopGroup: EventLoopGroup,
@@ -302,6 +302,7 @@ class ChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuple
     override fun channelActive(ctx: ChannelHandlerContext) {
         super.channelActive(ctx)
         promise.setSuccess(ctx.channel())
+        ctx.pipeline().remove(this)
     }
 
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {

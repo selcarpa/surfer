@@ -135,7 +135,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
                     }
                     relayAndOutboundOp.connectFail = {
                         //todo: When the remote cannot be connected, the origin needs to be notified correctly
-                        logger.warn { "from id: ${originCTX.channel().id().asShortText()}, connect to remote fail" }
+                        logger.warn { "[${originCTX.channel().id().asShortText()}] connect to remote fail" }
                         originCTX.close()
                     }
                 }

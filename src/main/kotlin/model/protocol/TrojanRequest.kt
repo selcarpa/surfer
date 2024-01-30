@@ -8,6 +8,8 @@ import io.netty.handler.codec.socksx.v5.Socks5AddressEncoder
 import io.netty.handler.codec.socksx.v5.Socks5AddressType
 import io.netty.util.ReferenceCountUtil
 
+val CARRIAGE_RETURN: ByteArray = ByteBufUtil.decodeHexDump("0d0a")
+
 data class TrojanRequest(val cmd: Byte, val atyp: Byte, val host: String, val port: Int)
 
 data class TrojanPackage(val hexSha224Password: String, val request: TrojanRequest, val payload: String) {
@@ -37,7 +39,7 @@ data class TrojanPackage(val hexSha224Password: String, val request: TrojanReque
         fun toByteBuf(trojanPackage: TrojanPackage): ByteBuf {
             val out = ReferenceCountUtil.releaseLater(Unpooled.buffer())
             out.writeBytes(trojanPackage.hexSha224Password.toByteArray())
-            out.writeBytes(ByteBufUtil.decodeHexDump("0d0a"))
+            out.writeBytes(CARRIAGE_RETURN)
             out.writeByte(trojanPackage.request.cmd.toInt())
             out.writeByte(trojanPackage.request.atyp.toInt())
             Socks5AddressEncoder.DEFAULT.encodeAddress(
@@ -46,7 +48,7 @@ data class TrojanPackage(val hexSha224Password: String, val request: TrojanReque
                 out
             )
             out.writeShort(trojanPackage.request.port)
-            out.writeBytes(ByteBufUtil.decodeHexDump("0d0a"))
+            out.writeBytes(CARRIAGE_RETURN)
             out.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
             return out
 
