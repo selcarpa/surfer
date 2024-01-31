@@ -19,6 +19,9 @@ import io.netty.handler.stream.ChunkedWriteHandler
 import io.netty.handler.timeout.IdleStateHandler
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
+import model.IDLE_CHECK_HANDLER
+import model.IDLE_CLOSE_HANDLER
+import model.LOG_HANDLER
 import model.config.Config.Configuration
 import model.config.Inbound
 import model.config.TlsInboundSetting
@@ -45,10 +48,10 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
         val portInboundMap =
             Configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
         val inbound = portInboundMap[localAddress.port]
-        ch.pipeline().addFirst(LoggingHandler(LogLevel.TRACE))
+        ch.pipeline().addFirst(LOG_HANDLER, LoggingHandler(LogLevel.TRACE))
         //todo: set idle timeout, and close channel
-        ch.pipeline().addFirst(IdleStateHandler(300, 300, 300))
-        ch.pipeline().addFirst(IdleCloseHandler())
+        ch.pipeline().addFirst(IDLE_CLOSE_HANDLER, IdleCloseHandler())
+        ch.pipeline().addFirst(IDLE_CHECK_HANDLER, IdleStateHandler(300, 300, 300))
         if (inbound != null) {
             when (Protocol.valueOfOrNull(inbound.protocol)) {
                 Protocol.HTTP -> {
@@ -131,30 +134,23 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
     }
 
     private fun initTlsInbound(
-        ch: NioSocketChannel,
-        tlsInboundSetting: TlsInboundSetting,
-        handleShakePromise: Promise<Channel>
+        ch: NioSocketChannel, tlsInboundSetting: TlsInboundSetting, handleShakePromise: Promise<Channel>
     ) {
         val sslCtx: SslContext = if (tlsInboundSetting.password != null) {
             SslContextBuilder.forServer(
-                File(tlsInboundSetting.keyCertChainFile),
-                File(tlsInboundSetting.keyFile),
-                tlsInboundSetting.password
+                File(tlsInboundSetting.keyCertChainFile), File(tlsInboundSetting.keyFile), tlsInboundSetting.password
             ).build()
         } else {
             SslContextBuilder.forServer(File(tlsInboundSetting.keyCertChainFile), File(tlsInboundSetting.keyFile))
                 .build()
         }
         ch.pipeline().addLast(
-            sslCtx.newHandler(ch.alloc()),
-            SslActiveHandler(handleShakePromise)
+            sslCtx.newHandler(ch.alloc()), SslActiveHandler(handleShakePromise)
         )
     }
 
     private fun initWebsocketInbound(
-        ch: NioSocketChannel,
-        wsInboundSetting: WsInboundSetting,
-        handleShakePromise: Promise<Channel>
+        ch: NioSocketChannel, wsInboundSetting: WsInboundSetting, handleShakePromise: Promise<Channel>
     ) {
         ch.pipeline().addLast(
             ChunkedWriteHandler(),

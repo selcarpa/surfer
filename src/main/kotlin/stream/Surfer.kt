@@ -7,7 +7,6 @@ import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioDatagramChannel
 import io.netty.channel.socket.nio.NioSocketChannel
-import io.netty.handler.logging.ByteBufFormat
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.proxy.HttpProxyHandler
@@ -17,6 +16,8 @@ import io.netty.handler.timeout.IdleStateHandler
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
+import model.IDLE_CHECK_HANDLER
+import model.IDLE_CLOSE_HANDLER
 import model.PROXY_HANDLER_NAME
 import model.RELAY_HANDLER_NAME
 import model.config.HttpOutboundSetting
@@ -28,7 +29,7 @@ import mu.KotlinLogging
 import netty.IdleCloseHandler
 import protocol.DiscardHandler
 import protocol.TrojanProxy
-import utils.ChannelUtils
+import utils.closeOnFlush
 import java.net.InetSocketAddress
 
 private val logger = KotlinLogging.logger {}
@@ -153,7 +154,7 @@ private fun trojanStream(
     connect(eventLoopGroup, {
         mutableListOf(
             HandlerPair(TrojanProxy(outbound, odor, streamBy), PROXY_HANDLER_NAME),
-            HandlerPair(ChannelActiveHandler(promise))
+            HandlerPair(ProxyChannelActiveHandler(promise), "proxy_channel_active_handler")
         )
     }, odor)
 
@@ -166,8 +167,7 @@ private fun galaxy(
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     connect(eventLoopGroup, {
         mutableListOf(
-            //todo this promise will be effected by setSuccess in ChannelActiveHandler, when this promise cannot triggered correctly, the connectEstablishedCallback cannot triggered correctly either
-            HandlerPair(ChannelActiveHandler(promise))
+            HandlerPair(BasicChannelActiveHandler(promise), "proxy_channel_active_handler")
         )
     }, odor)
 }
@@ -195,7 +195,7 @@ private fun httpStream(
     connect(eventLoopGroup, {
         mutableListOf(
             HandlerPair(proxyHandler, PROXY_HANDLER_NAME),
-            HandlerPair(ChannelActiveHandler(promise))
+            HandlerPair(ProxyChannelActiveHandler(promise), "proxy_channel_active_handler")
         )
     }, odor)
 }
@@ -223,15 +223,13 @@ private fun socks5Stream(
     connect(eventLoopGroup, {
         mutableListOf(
             HandlerPair(proxyHandler, PROXY_HANDLER_NAME),
-            HandlerPair(ChannelActiveHandler(promise))
+            HandlerPair(ProxyChannelActiveHandler(promise), "proxy_channel_active_handler")
         )
     }, odor)
 }
 
 private fun connect(
-    eventLoopGroup: EventLoopGroup,
-    handlerPairs: (Channel) -> MutableList<HandlerPair>,
-    odor: Odor
+    eventLoopGroup: EventLoopGroup, handlerPairs: (Channel) -> MutableList<HandlerPair>, odor: Odor
 ) {
     val protocol = odor.desProtocol.topProtocol()
     if (protocol == Protocol.TCP) {
@@ -246,14 +244,10 @@ class SurferInitializer(private val handlerPairs: (Channel) -> MutableList<Handl
     ChannelInitializer<Channel>() {
     override fun initChannel(ch: Channel) {
         //todo: set idle timeout, and close channel
-        ch.pipeline().addFirst(IdleStateHandler(300, 300, 300))
-        ch.pipeline().addFirst(IdleCloseHandler())
+        ch.pipeline().addFirst(IDLE_CLOSE_HANDLER, IdleCloseHandler())
+        ch.pipeline().addFirst(IDLE_CHECK_HANDLER, IdleStateHandler(300, 300, 300))
         handlerPairs(ch).forEach {
-            if (it.name != null) {
-                ch.pipeline().addLast(it.name, it.handler)
-            } else {
-                ch.pipeline().addLast(it.handler)
-            }
+            ch.pipeline().addLast(it.name, it.handler)
         }
 
     }
@@ -265,15 +259,11 @@ private fun connectTcp(
     socketAddress: InetSocketAddress,
     notDns: Boolean = false
 ) {
-    Bootstrap().group(eventLoopGroup)
-        .also {
+    Bootstrap().group(eventLoopGroup).also {
             if (!notDns) {
                 it.disableResolver()
             }
-        }
-        .channel(NioSocketChannel::class.java)
-        .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
-        .handler(channelInitializer)
+        }.channel(NioSocketChannel::class.java).handler(LoggingHandler(LogLevel.TRACE)).handler(channelInitializer)
         .connect(socketAddress)
 }
 
@@ -283,34 +273,36 @@ private fun connectUdp(
     socketAddress: InetSocketAddress,
     notDns: Boolean = false
 ) {
-    Bootstrap().group(eventLoopGroup)
-        .also {
+    Bootstrap().group(eventLoopGroup).also {
             if (!notDns) {
                 it.disableResolver()
             }
-        }
-        .channel(NioDatagramChannel::class.java)
-        .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
-        .handler(channelInitializer)
+        }.channel(NioDatagramChannel::class.java).handler(LoggingHandler(LogLevel.TRACE)).handler(channelInitializer)
         .connect(socketAddress)
 }
 
 /**
  * basic activator for client connected, some protocol not have complex handshake process, so we can use this activator to active other operation
  */
-class ChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHandler() {
-    private val logger = KotlinLogging.logger {}
+class BasicChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHandler() {
     override fun channelActive(ctx: ChannelHandlerContext) {
         super.channelActive(ctx)
         promise.setSuccess(ctx.channel())
         ctx.pipeline().remove(this)
     }
+}
 
-    override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
+/**
+ * proxy activator for client connected, when proxy handshake complete, we can activate other operation
+ */
+class ProxyChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHandler() {
+    override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
         if (evt is ProxyConnectionEvent) {
             logger.trace { "ProxyConnectionEvent: $evt" }
+            promise.setSuccess(ctx.channel())
+            ctx.pipeline().remove(this)
         }
-        ctx.fireUserEventTriggered(evt)
+        super.userEventTriggered(ctx, evt)
     }
 }
 
@@ -354,7 +346,7 @@ class RelayInboundHandler(private val relayChannel: Channel, private val inActiv
                 }] relay channel is not active, close message:${msg.javaClass.name}"
             )
             ReferenceCountUtil.release(msg)
-            ChannelUtils.closeOnFlush(ctx.channel())
+            ctx.channel().closeOnFlush()
         }
     }
 
@@ -384,6 +376,4 @@ class RelayInboundHandler(private val relayChannel: Channel, private val inActiv
     }
 }
 
-data class HandlerPair(val handler: ChannelHandler, val name: String?) {
-    constructor(handler: ChannelHandler) : this(handler, null)
-}
+data class HandlerPair(val handler: ChannelHandler, val name: String) {}

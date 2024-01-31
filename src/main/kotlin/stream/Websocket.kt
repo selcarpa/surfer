@@ -22,7 +22,7 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
 
     private var continuationBuffer: ByteBuf? = null
 
-    override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
+    override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
         //when surfer as a websocket server, we need to handle handshake complete event to determine whether the handshake is successful, and start the relay operation
         if (evt is WebSocketServerProtocolHandler.HandshakeComplete) {
             logger.trace { "[${ctx.channel().id()}] WebsocketInbound handshake complete" }
@@ -38,7 +38,7 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
                 handleShakePromise?.setFailure(Throwable("websocket handshake failed"))
             }
         }
-        logger.trace { "[${ctx.channel().id()}] WebsocketInbound userEventTriggered: $evt" }
+        logger.trace { "[${ctx.channel().id()}] userEventTriggered: $evt" }
         super.userEventTriggered(ctx, evt)
     }
 

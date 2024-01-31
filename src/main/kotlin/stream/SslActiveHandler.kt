@@ -11,13 +11,17 @@ import mu.KotlinLogging
  * ssl activator for client connected, when ssl handshake complete, we can activate other operation
  */
 class SslActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHandler() {
-    private val logger = KotlinLogging.logger {}
-    override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any?) {
+    companion object {
+        private val logger = KotlinLogging.logger {}
+    }
+
+    override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
         if (evt is SslCompletionEvent) {
             logger.trace { "SslCompletionEvent: $evt" }
             promise.setSuccess(ctx.channel())
             ctx.channel().pipeline().remove(this)
         }
-        ctx.fireUserEventTriggered(evt)
+        logger.trace { "[${ctx.channel().id()}] userEventTriggered: $evt" }
+        super.userEventTriggered(ctx, evt)
     }
 }

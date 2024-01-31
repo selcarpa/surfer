@@ -3,10 +3,15 @@ package model
 const val RELAY_HANDLER_NAME = "relay_handler"
 const val PROXY_HANDLER_NAME = "proxy_handler"
 const val TROJAN_PROXY_OUTBOUND = "trojan_proxy_outbound"
+const val LOG_HANDLER = "log_handler"
+const val IDLE_CLOSE_HANDLER = "idle_close_handler"
+const val IDLE_CHECK_HANDLER = "idle_check_handler"
+
 
 enum class LogLevel {
     TRACE, DEBUG, INFO, WARN, ERROR, OFF;
-    companion object{
+
+    companion object {
         fun by(levelString: String) = when (levelString.lowercase()) {
             "trace" -> TRACE
             "debug" -> DEBUG
@@ -26,7 +31,6 @@ enum class LogLevel {
         ERROR -> ch.qos.logback.classic.Level.ERROR
         OFF -> ch.qos.logback.classic.Level.OFF
     }
-
 
 
 }

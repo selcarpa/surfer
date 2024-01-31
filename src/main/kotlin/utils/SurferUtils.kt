@@ -33,6 +33,9 @@ fun String.toAddressType(): SocksAddressType {
     }
 }
 
+/**
+ * convert a string to sha224 hash
+ */
 fun String.toSha224(): String {
     val digest = MessageDigest.getInstance("SHA-224")
     val hash = digest.digest(this.toByteArray())

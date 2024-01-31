@@ -89,7 +89,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                         }
                     }
                     relayAndOutboundOp.connectFail = {
-                        ChannelUtils.closeOnFlush(originCTX.channel())
+                        originCTX.channel().closeOnFlush()
                     }
                 })
             }
@@ -124,7 +124,7 @@ class TrojanOutboundHandler(
     private val trojanSetting: TrojanSetting, private val trojanRequest: TrojanRequest
 ) : ChannelDuplexHandler() {
 
-    private var firstPackage = true
+    private var handshaked = false
 
 //    constructor(
 //        outbound: Outbound, odor: Odor
@@ -134,8 +134,8 @@ class TrojanOutboundHandler(
 //        )
 //    )
 
-    override fun write(ctx: ChannelHandlerContext?, msg: Any?, promise: ChannelPromise?) {
-        if (!firstPackage) {
+    override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
+        if (handshaked) {
             super.write(ctx, msg, promise)
             return
         }
@@ -143,7 +143,7 @@ class TrojanOutboundHandler(
             val trojanPackage = byteBuf2TrojanPackage(msg, trojanSetting, trojanRequest)
             ReferenceCountUtil.release(msg)
             val trojanByteBuf = TrojanPackage.toByteBuf(trojanPackage)
-            firstPackage = false
+            handshaked = !handshaked
             super.write(ctx, trojanByteBuf, promise)
             return
         }
@@ -164,7 +164,7 @@ fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequ
 
 class TrojanProxy(
     private val socketAddress: InetSocketAddress,
-    private val outboundStreamBy: OutboundStreamBy?,
+    private val outboundStreamBy: OutboundStreamBy,
     trojanSetting: TrojanSetting,
     trojanRequest: TrojanRequest,
     private val streamBy: Protocol,
@@ -180,7 +180,7 @@ class TrojanProxy(
 
     constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
-        outbound.outboundStreamBy,
+        outbound.outboundStreamBy!!,
         outbound.trojanSetting!!,
         TrojanRequest(
             Socks5CommandType.CONNECT.byteValue(), odor.host.toAddressType().byteValue(), odor.host, odor.port

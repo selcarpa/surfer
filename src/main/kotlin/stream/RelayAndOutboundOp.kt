@@ -5,7 +5,7 @@ import io.netty.channel.ChannelFuture
 import io.netty.channel.ChannelHandlerContext
 import model.config.Outbound
 import model.protocol.Odor
-import utils.ChannelUtils
+import utils.closeOnFlush
 
 /**
  * Abstract Relay and outbound operation, including some necessary parameters for the operation
@@ -34,7 +34,7 @@ data class RelayAndOutboundOp(
      */
     var connectFail: () -> Unit = {
         //while connect failed, write failure response to client, and close the connection
-        ChannelUtils.closeOnFlush(originCTX.channel())
+        originCTX.channel().closeOnFlush()
     };
 
 

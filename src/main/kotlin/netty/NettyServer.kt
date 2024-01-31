@@ -14,6 +14,7 @@ import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.util.concurrent.DefaultThreadFactory
 import io.netty.util.concurrent.ThreadPerTaskExecutor
+import model.LOG_HANDLER
 import model.config.Config.Configuration
 import model.config.Inbound
 import model.protocol.Protocol
@@ -44,7 +45,7 @@ object NettyServer {
             //tcp
             val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel::class.java)
-                .handler(LoggingHandler(LogLevel.TRACE, ByteBufFormat.SIMPLE))
+                .handler( LoggingHandler(LogLevel.TRACE))
                 .childHandler(ProxyChannelInitializer())
             it.stream()
                 .filter { inbound -> transmissionAssert(inbound, Protocol.TCP) }

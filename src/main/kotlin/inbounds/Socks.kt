@@ -15,7 +15,7 @@ import mu.KotlinLogging
 import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.relayAndOutbound
-import utils.ChannelUtils
+import utils.closeOnFlush
 
 class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
     companion object {
@@ -107,7 +107,7 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, throwable: Throwable) {
         logger.error(throwable.message, throwable)
-        ChannelUtils.closeOnFlush(ctx.channel())
+        ctx.channel().closeOnFlush()
     }
 }
 
@@ -180,6 +180,6 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         logger.error(cause.message, cause)
-        ChannelUtils.closeOnFlush(ctx.channel())
+        ctx.channel().closeOnFlush()
     }
 }

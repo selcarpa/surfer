@@ -14,6 +14,7 @@ import mu.KotlinLogging
 import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.relayAndOutbound
+import utils.cleanHandlers
 import java.net.URI
 
 
@@ -72,11 +73,8 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
                 ).also { relayAndOutboundOp ->
                     relayAndOutboundOp.connectEstablishedCallback = {
                         it.writeAndFlush(encoded).also {
-                            //remove all listener
-                            val pipeline = originCTX.pipeline()
-                            while (pipeline.first() != null) {
-                                pipeline.removeFirst()
-                            }
+                            //remove all useless listener
+                            originCTX.pipeline().cleanHandlers()
                         }
                     }
                     relayAndOutboundOp.connectFail = {
@@ -126,11 +124,8 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
                                 HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
                             )
                         ).also {
-                            //remove all listener
-                            val pipeline = originCTX.pipeline()
-                            while (pipeline.first() != null) {
-                                pipeline.removeFirst()
-                            }
+                            //remove all useless listener
+                           originCTX.pipeline().cleanHandlers()
                         }
                     }
                     relayAndOutboundOp.connectFail = {
