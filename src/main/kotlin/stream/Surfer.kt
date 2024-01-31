@@ -166,6 +166,7 @@ private fun galaxy(
     val promise = eventLoopGroup.next().newPromise<Channel>().also { it.addListener(connectListener) }
     connect(eventLoopGroup, {
         mutableListOf(
+            //todo this promise will be effected by setSuccess in ChannelActiveHandler, when this promise cannot triggered correctly, the connectEstablishedCallback cannot triggered correctly either
             HandlerPair(ChannelActiveHandler(promise))
         )
     }, odor)

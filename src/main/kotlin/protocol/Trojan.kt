@@ -15,6 +15,7 @@ import io.netty.handler.codec.http.websocketx.WebSocketVersion
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.handler.proxy.ProxyHandler
+import io.netty.handler.ssl.SslCompletionEvent
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
@@ -33,9 +34,7 @@ import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.WebsocketDuplexHandler
 import stream.relayAndOutbound
-import utils.ChannelUtils
-import utils.Sha224Utils
-import utils.SurferUtils
+import utils.*
 import java.net.InetSocketAddress
 import java.net.URI
 
@@ -50,9 +49,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
         val trojanPackage = TrojanPackage.parse(msg)
 
         if (ByteBufUtil.hexDump(
-                Sha224Utils.encryptAndHex(
-                    SurferUtils.toUUid(inbound.trojanSetting!!.password).toString()
-                ).toByteArray()
+                inbound.trojanSetting!!.password.toUUid().toString().toSha224().toByteArray()
             ) == trojanPackage.hexSha224Password
         ) {
             logger.info(
@@ -76,29 +73,25 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                 fromChannel = originCTX.channel().id().asShortText()
             )
             resolveOutbound(inbound = inbound, odor = odor).ifPresent { outbound ->
-                relayAndOutbound(
-                    RelayAndOutboundOp(
-                        originCTX = originCTX,
-                        outbound = outbound,
-                        odor = odor
-                    ).also { relayAndOutboundOp ->
-                        relayAndOutboundOp.connectEstablishedCallback = {
-                            val payload = Unpooled.buffer()
-                            payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
-                            it.writeAndFlush(payload).addListener {
-                                //avoid remove this handler twice
-                                if (!removed) {
-                                    //Trojan protocol only need package once, then send origin data directly
-                                    originCTX.pipeline().remove(this)
-                                    removed = true
-                                }
+                relayAndOutbound(RelayAndOutboundOp(
+                    originCTX = originCTX, outbound = outbound, odor = odor
+                ).also { relayAndOutboundOp ->
+                    relayAndOutboundOp.connectEstablishedCallback = {
+                        val payload = Unpooled.buffer()
+                        payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
+                        it.writeAndFlush(payload).addListener {
+                            //avoid remove this handler twice
+                            if (!removed) {
+                                //Trojan protocol only need package once, then send origin data directly
+                                originCTX.pipeline().remove(this)
+                                removed = true
                             }
                         }
-                        relayAndOutboundOp.connectFail = {
-                            ChannelUtils.closeOnFlush(originCTX.channel())
-                        }
                     }
-                )
+                    relayAndOutboundOp.connectFail = {
+                        ChannelUtils.closeOnFlush(originCTX.channel())
+                    }
+                })
             }
         } else {
             logger.warn { "id: ${originCTX.channel().id().asShortText()}, drop trojan package, password not matched" }
@@ -128,22 +121,18 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
 }
 
 class TrojanOutboundHandler(
-    private val trojanSetting: TrojanSetting,
-    private val trojanRequest: TrojanRequest
+    private val trojanSetting: TrojanSetting, private val trojanRequest: TrojanRequest
 ) : ChannelDuplexHandler() {
 
     private var firstPackage = true
 
-    constructor(
-        outbound: Outbound, odor: Odor
-    ) : this(
-        outbound.trojanSetting!!, TrojanRequest(
-            Socks5CommandType.CONNECT.byteValue(),
-            odor.addressType().byteValue(),
-            odor.host,
-            odor.port
-        )
-    )
+//    constructor(
+//        outbound: Outbound, odor: Odor
+//    ) : this(
+//        outbound.trojanSetting!!, TrojanRequest(
+//            Socks5CommandType.CONNECT.byteValue(), odor.addressType().byteValue(), odor.host, odor.port
+//        )
+//    )
 
     override fun write(ctx: ChannelHandlerContext?, msg: Any?, promise: ChannelPromise?) {
         if (!firstPackage) {
@@ -169,9 +158,7 @@ class TrojanOutboundHandler(
  */
 fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequest: TrojanRequest): TrojanPackage =
     TrojanPackage(
-        Sha224Utils.encryptAndHex(SurferUtils.toUUid(trojanSetting.password).toString()),
-        trojanRequest,
-        ByteBufUtil.hexDump(msg)
+        trojanSetting.password.toUUid().toString().toSha224(), trojanRequest, ByteBufUtil.hexDump(msg)
     )
 
 
@@ -189,15 +176,14 @@ class TrojanProxy(
             }
     }
 
+    private val logger = KotlinLogging.logger { }
+
     constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
         outbound.outboundStreamBy,
         outbound.trojanSetting!!,
         TrojanRequest(
-            Socks5CommandType.CONNECT.byteValue(),
-            odor.addressType().byteValue(),
-            odor.host,
-            odor.port
+            Socks5CommandType.CONNECT.byteValue(), odor.host.toAddressType().byteValue(), odor.host, odor.port
         ),
         streamBy
     )
@@ -216,8 +202,11 @@ class TrojanProxy(
         val name = ctx.name()
 
         when (streamBy) {
+            //when just a plain tcp connect, we just open the tcp connect and add trojan outbound handler
             Protocol.TCP -> {
                 addPreHandledTcp(ctx)
+                p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
+                p.addLast("AutoSuccessHandler", AutoSuccessHandler { setConnectSuccess.invoke(this) })
             }
 
             Protocol.TLS -> {
@@ -236,36 +225,50 @@ class TrojanProxy(
             else -> throw IllegalArgumentException("unsupported stream")
         }
 
-        p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-        p.addLast("AutoSuccessHandler", AutoSuccessHandler { setConnectSuccess.invoke(this) })
+
     }
 
     /**
      * add websocket handler before trojan outbound handler
      */
     private fun addPreHandledWs(ctx: ChannelHandlerContext) {
-        val uri =
-            URI(
-                "ws://${outboundStreamBy!!.wsOutboundSetting!!.host}:${outboundStreamBy.wsOutboundSetting!!.port}/${
-                    outboundStreamBy.wsOutboundSetting.path.removePrefix(
-                        "/"
-                    )
-                }"
-            )
-
+        val uri = URI(
+            "${
+                if (streamBy == Protocol.WS) {
+                    "ws"
+                } else if (streamBy == Protocol.WSS) {
+                    "wss"
+                } else {
+                    throw IllegalArgumentException("unsupported stream")
+                }
+            }://${outboundStreamBy!!.wsOutboundSetting!!.host}:${outboundStreamBy.wsOutboundSetting!!.port}/${
+                outboundStreamBy.wsOutboundSetting.path.removePrefix(
+                    "/"
+                )
+            }"
+        )
+        logger.debug { "ws uri: $uri" }
         ctx.pipeline().addBefore(ctx.name(), "HttpClientCodec", HttpClientCodec())
         ctx.pipeline().addBefore(ctx.name(), "HttpObjectAggregator", HttpObjectAggregator(8192))
         ctx.pipeline()
             .addBefore(ctx.name(), "WebSocketClientCompressionHandler", WebSocketClientCompressionHandler.INSTANCE)
 
         ctx.pipeline().addBefore(
-            ctx.name(), "ws-handshake", WebSocketClientProtocolHandler(
+            ctx.name(), "websocket_client_handshaker", WebSocketClientProtocolHandler(
                 WebSocketClientHandshakerFactory.newHandshaker(
                     uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
                 )
             )
         )
-        ctx.pipeline().addBefore(ctx.name(), "ws", WebsocketDuplexHandler())
+        ctx.pipeline().addLast("AutoSuccessHandler", AutoSuccessHandler { setConnectSuccess.invoke(this) })
+
+        val newPromise = ctx.channel().eventLoop().newPromise<Channel>()
+        newPromise.addListener {
+            if (it.isSuccess && !ctx.pipeline().names().contains(TROJAN_PROXY_OUTBOUND)) {
+                ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
+            }
+        }
+        ctx.pipeline().addBefore(ctx.name(), "websocket_duplex_handler", WebsocketDuplexHandler(newPromise))
     }
 
     /**
@@ -275,10 +278,19 @@ class TrojanProxy(
         val sslCtx: SslContext =
             SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
         ctx.pipeline().addBefore(
-            ctx.name(),
-            "ssl",
-            sslCtx.newHandler(ctx.channel().alloc(), socketAddress.hostName, socketAddress.port)
+            ctx.name(), "ssl", sslCtx.newHandler(ctx.channel().alloc(), socketAddress.hostName, socketAddress.port)
         )
+        ctx.pipeline().addLast(object : ChannelInboundHandlerAdapter() {
+            override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
+                if (evt is SslCompletionEvent) {
+                    ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
+                    ctx.pipeline().addLast("AutoSuccessHandler", AutoSuccessHandler { setConnectSuccess.invoke(this) })
+                    ctx.pipeline().remove(this)
+                    return
+                }
+                super.userEventTriggered(ctx, evt)
+            }
+        })
     }
 
 

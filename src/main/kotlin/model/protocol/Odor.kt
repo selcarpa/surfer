@@ -1,6 +1,5 @@
 package model.protocol
 
-import utils.SurferUtils
 import java.net.InetSocketAddress
 
 data class Odor(
@@ -16,13 +15,4 @@ data class Odor(
     var transmissionTrans: Boolean = false,
 ) {
     fun socketAddress(): InetSocketAddress = InetSocketAddress(host, port)
-
-
-    fun addressType() = SurferUtils.getAddressType(
-        if (redirectHost != null) {
-            redirectHost!!
-        } else {
-            host
-        }
-    )
 }

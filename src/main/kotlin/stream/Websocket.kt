@@ -51,7 +51,7 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
     }
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        logger.trace("WebsocketInbound receive message:${msg.javaClass.name}")
+        logger.trace("[${ctx.channel().id().asShortText()}] WebsocketInbound receive message:${msg.javaClass.name}")
         when (msg) {
             is FullHttpRequest -> {
                 //ignored
@@ -70,7 +70,7 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
             }
 
             is TextWebSocketFrame -> {
-                logger.trace("WebsocketInbound receive message:${msg.javaClass.name} ${msg.text()}")
+                logger.trace("[${ctx.channel().id().asShortText()}] receive text message: ${msg.text()}")
             }
 
             is BinaryWebSocketFrame -> {
