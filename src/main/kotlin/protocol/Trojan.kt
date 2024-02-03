@@ -245,7 +245,7 @@ class TrojanProxy(
                 )
             }"
         )
-        logger.debug { "ws uri: $uri" }
+        logger.debug { "[${ctx.channel().id().asShortText()}] websocket handle shake, uri: $uri" }
         ctx.pipeline().addBefore(ctx.name(), "HttpClientCodec", HttpClientCodec())
         ctx.pipeline().addBefore(ctx.name(), "HttpObjectAggregator", HttpObjectAggregator(8192))
         ctx.pipeline()

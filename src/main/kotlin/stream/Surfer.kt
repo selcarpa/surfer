@@ -260,10 +260,10 @@ private fun connectTcp(
     notDns: Boolean = false
 ) {
     Bootstrap().group(eventLoopGroup).also {
-            if (!notDns) {
-                it.disableResolver()
-            }
-        }.channel(NioSocketChannel::class.java).handler(LoggingHandler(LogLevel.TRACE)).handler(channelInitializer)
+        if (!notDns) {
+            it.disableResolver()
+        }
+    }.channel(NioSocketChannel::class.java).handler(LoggingHandler(LogLevel.TRACE)).handler(channelInitializer)
         .connect(socketAddress)
 }
 
@@ -274,10 +274,10 @@ private fun connectUdp(
     notDns: Boolean = false
 ) {
     Bootstrap().group(eventLoopGroup).also {
-            if (!notDns) {
-                it.disableResolver()
-            }
-        }.channel(NioDatagramChannel::class.java).handler(LoggingHandler(LogLevel.TRACE)).handler(channelInitializer)
+        if (!notDns) {
+            it.disableResolver()
+        }
+    }.channel(NioDatagramChannel::class.java).handler(LoggingHandler(LogLevel.TRACE)).handler(channelInitializer)
         .connect(socketAddress)
 }
 
@@ -298,7 +298,7 @@ class BasicChannelActiveHandler(private val promise: Promise<Channel>) : Channel
 class ProxyChannelActiveHandler(private val promise: Promise<Channel>) : ChannelDuplexHandler() {
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
         if (evt is ProxyConnectionEvent) {
-            logger.trace { "ProxyConnectionEvent: $evt" }
+            logger.trace { "[${ctx.channel().id().asShortText()}] triggered ProxyConnectionEvent: $evt" }
             promise.setSuccess(ctx.channel())
             ctx.pipeline().remove(this)
         }
@@ -322,29 +322,28 @@ class RelayInboundHandler(private val relayChannel: Channel, private val inActiv
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
         if (relayChannel.isActive) {
-            logger.trace(
-                "relay inbound read from [{}] pipeline handlers:{}, to [{}] pipeline handlers:{}, write message:{}",
-                ctx.channel().id().asShortText(),
-                ctx.channel().pipeline().names(),
-                relayChannel.id().asShortText(),
-                relayChannel.pipeline().names(),
-                msg.javaClass.name
-            )
+            logger.trace {
+                "relay inbound read from [${ctx.channel().id().asShortText()}] pipeline handlers:${
+                    ctx.channel().pipeline().names()
+                }, to [${relayChannel.id().asShortText()}] pipeline handlers:${
+                    relayChannel.pipeline().names()
+                }, write message:${msg.javaClass.name}"
+            }
             relayChannel.writeAndFlush(msg).addListener(ChannelFutureListener {
                 if (!it.isSuccess) {
-                    logger.error(
-                        "relay inbound write message:${msg.javaClass.name} to [${
+                    logger.error(it.cause()) {
+                        "relay inbound write message: ${msg.javaClass.name} to [${
                             relayChannel.id().asShortText()
-                        }] failed, cause: ${it.cause().message}", it.cause()
-                    )
+                        }] failed, cause: ${it.cause().message}"
+                    }
                 }
             })
         } else {
-            logger.warn(
+            logger.warn {
                 "[${
                     relayChannel.id().asShortText()
                 }] relay channel is not active, close message:${msg.javaClass.name}"
-            )
+            }
             ReferenceCountUtil.release(msg)
             ctx.channel().closeOnFlush()
         }
@@ -352,11 +351,11 @@ class RelayInboundHandler(private val relayChannel: Channel, private val inActiv
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
         if (relayChannel.isActive) {
-            logger.debug(
-                "[{}] closed channel, write close to relay channel [{}]",
-                ctx.channel().id().asShortText(),
-                relayChannel.id().asShortText()
-            )
+            logger.debug {
+                "[${ctx.channel().id().asShortText()}] closed channel, write close to relay channel [${
+                    relayChannel.id().asShortText()
+                }]"
+            }
             relayChannel.pipeline().remove(RELAY_HANDLER_NAME)
             //add a discard handler to discard all message
             relayChannel.pipeline().addLast(DiscardHandler())
@@ -367,13 +366,13 @@ class RelayInboundHandler(private val relayChannel: Channel, private val inActiv
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        logger.error(
+        logger.error(cause) {
             "relay inbound handler exception caught, [${ctx.channel().id()}], pipeline: ${
                 ctx.channel().pipeline().names()
-            }, message: ${cause.message}", cause
-        )
+            }, message: ${cause.message}"
+        }
         ctx.close()
     }
 }
 
-data class HandlerPair(val handler: ChannelHandler, val name: String) {}
+data class HandlerPair(val handler: ChannelHandler, val name: String)

@@ -22,11 +22,11 @@ fun resolveOutbound(inbound: Inbound, odor: Odor): Optional<Outbound> {
         val matchingOutbound = Configuration.outbounds.stream()
             .filter { outbound -> matchingRule.get().outboundTag == outbound.tag }.findFirst()
         if (matchingOutbound.isPresent) {
-            logger.info { "resolve outbound [${odor.fromChannel}] to ${matchingOutbound.get().tag}" }
+            logger.info { "[${odor.fromChannel}] resolve outbound to ${matchingOutbound.get().tag}" }
             return matchingOutbound
         }
     }
-    logger.info { "no specify outbound match [${odor.fromChannel}], use first outbound" }
+    logger.info { "[${odor.fromChannel}] no specify outbound matched, use first outbound" }
     return Configuration.outbounds.stream().filter { true }.findFirst()
 }
 

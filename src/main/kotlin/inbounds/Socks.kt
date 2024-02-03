@@ -90,7 +90,11 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
      */
     private fun socks5DoAuth(socksRequest: Socks5PasswordAuthRequest, ctx: ChannelHandlerContext) {
         if (inbound.socks5Setting?.auth?.username != socksRequest.username() || inbound.socks5Setting?.auth?.password != socksRequest.password()) {
-            logger.warn("socks5 auth failed from: ${ctx.channel().remoteAddress()}")
+            logger.warn {
+                "${ctx.channel().id().asShortText()} socks5 auth failed from: ${
+                    ctx.channel().remoteAddress()
+                }"
+            }
             ctx.write(DefaultSocks5PasswordAuthResponse(Socks5PasswordAuthStatus.FAILURE))
             ctx.close()
             return
@@ -105,8 +109,8 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
     }
 
     @Suppress("OVERRIDE_DEPRECATION")
-    override fun exceptionCaught(ctx: ChannelHandlerContext, throwable: Throwable) {
-        logger.error(throwable.message, throwable)
+    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
+        logger.error(cause) { cause.message }
         ctx.channel().closeOnFlush()
     }
 }
@@ -172,7 +176,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
 
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        logger.error(cause.message, cause)
+        logger.error(cause) { cause.message }
         ctx.channel().closeOnFlush()
     }
 }
