@@ -104,7 +104,9 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         if (cause is DecoderException || cause.cause is DecoderException) {
             logger.warn {
-                "[${ctx.channel().id().asShortText()}] parse trojan package failed, ${cause.message}, give a discard handler"
+                "[${
+                    ctx.channel().id().asShortText()
+                }] parse trojan package failed, ${cause.message}, give a discard handler"
             }
             ctx.pipeline().forEach {
                 ctx.pipeline().remove(it.value)
@@ -258,7 +260,10 @@ class TrojanProxy(
                 )
             )
         )
-        ctx.pipeline().addLast("AutoSuccessHandler", AutoSuccessHandler { setConnectSuccess.invoke(this) })
+        //fixme: trojan proxy via websocket should not setConnectSuccess here
+        ctx.pipeline().addLast("AutoSuccessHandler", AutoSuccessHandler {
+            setConnectSuccess.invoke(this@TrojanProxy)
+        })
 
         val newPromise = ctx.channel().eventLoop().newPromise<Channel>()
         newPromise.addListener {
@@ -282,7 +287,7 @@ class TrojanProxy(
             override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
                 if (evt is SslCompletionEvent) {
                     ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-                    ctx.pipeline().addLast("AutoSuccessHandler", AutoSuccessHandler { setConnectSuccess.invoke(this) })
+                    setConnectSuccess.invoke(this@TrojanProxy)
                     ctx.pipeline().remove(this)
                     return
                 }
