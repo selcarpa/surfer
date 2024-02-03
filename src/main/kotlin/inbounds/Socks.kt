@@ -142,37 +142,30 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
             fromChannel = originCTX.channel().id().asShortText()
         )
         val resolveOutbound = resolveOutbound(inbound, odor)
-        logger.info(
-            "socks5 inbound: [{}], uri: {}, command: {}",
-            originCTX.channel().id().asShortText(),
-            "${message.dstAddr()}:${message.dstPort()}",
-            message.type()
-        )
+        logger.info {
+            "[${
+                originCTX.channel().id().asShortText()
+            }] socks5 inbounded, uri: ${message.dstAddr()}:${message.dstPort()}, command: ${message.type()}"
+        }
+
         resolveOutbound.ifPresent { outbound ->
 
-            relayAndOutbound(
-                RelayAndOutboundOp(
-                    originCTX = originCTX,
-                    outbound = outbound,
-                    odor = odor
-                ).also {relayAndOutboundOp ->
-                    relayAndOutboundOp.connectEstablishedCallback = {
-                        originCTX.channel().writeAndFlush(
-                            DefaultSocks5CommandResponse(
-                                Socks5CommandStatus.SUCCESS,
-                                message.dstAddrType(),
-                                message.dstAddr(),
-                                message.dstPort()
-                            )
-                        ).addListener(ChannelFutureListener {
-                            originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                        })
-                    }
-                    relayAndOutboundOp.connectFail = {
-                        originCTX.close()
-                    }
+            relayAndOutbound(RelayAndOutboundOp(
+                originCTX = originCTX, outbound = outbound, odor = odor
+            ).also { relayAndOutboundOp ->
+                relayAndOutboundOp.connectEstablishedCallback = {
+                    originCTX.channel().writeAndFlush(
+                        DefaultSocks5CommandResponse(
+                            Socks5CommandStatus.SUCCESS, message.dstAddrType(), message.dstAddr(), message.dstPort()
+                        )
+                    ).addListener(ChannelFutureListener {
+                        originCTX.pipeline().remove(this@SocksServerConnectHandler)
+                    })
                 }
-            )
+                relayAndOutboundOp.connectFail = {
+                    originCTX.close()
+                }
+            })
         }
 
     }

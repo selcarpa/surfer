@@ -94,7 +94,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                 })
             }
         } else {
-            logger.warn { "id: ${originCTX.channel().id().asShortText()}, drop trojan package, password not matched" }
+            logger.warn { "${originCTX.channel().id().asShortText()}, drop trojan package, password not matched" }
 
         }
     }
@@ -104,9 +104,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         if (cause is DecoderException || cause.cause is DecoderException) {
             logger.warn {
-                "[${
-                    ctx.channel().id().asShortText()
-                }] parse trojan package failed, ${cause.message}, give a discard handler"
+                "[${ctx.channel().id().asShortText()}] parse trojan package failed, ${cause.message}, give a discard handler"
             }
             ctx.pipeline().forEach {
                 ctx.pipeline().remove(it.value)

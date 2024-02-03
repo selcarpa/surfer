@@ -28,18 +28,17 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
         super.channelInactive(ctx)
     }
 
-    override fun channelRead0(originCTX: ChannelHandlerContext, msg: HttpRequest) {
+    override fun channelRead0(originCTX: ChannelHandlerContext, request: HttpRequest) {
         //http proxy and http connect method
-        logger.info(
-            "http inbound: [{}], method: {}, uri: {}",
-            originCTX.channel().id().asShortText(),
-            msg.method(),
-            msg.uri()
-        )
-        if (msg.method() == HttpMethod.CONNECT) {
-            tunnelProxy(originCTX, msg)
+        logger.info {
+            "[${
+                originCTX.channel().id().asShortText()
+            }] http inbounded, method: ${request.method()}, uri: ${request.uri()}"
+        }
+        if (request.method() == HttpMethod.CONNECT) {
+            tunnelProxy(originCTX, request)
         } else {
-            httpProxy(originCTX, msg)
+            httpProxy(originCTX, request)
         }
     }
 
@@ -63,25 +62,27 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
         ch.close()
         val resolveOutbound = resolveOutbound(inbound, odor)
 
-        logger.trace("http proxy outbound from {}, content: {}", originCTX.channel().id().asShortText(), request)
+        //This code actually prints out the client's request, in this case the request will be monitored. It is not safe to use proxy for http when you not trust in proxy provider
+        logger.trace {
+            "[${
+                originCTX.channel().id().asShortText()
+            }] http proxy inbounded, host: [${request}]"
+        }
+
         resolveOutbound.ifPresent { outbound ->
-            relayAndOutbound(
-                RelayAndOutboundOp(
-                    originCTX = originCTX,
-                    outbound = outbound,
-                    odor = odor
-                ).also { relayAndOutboundOp ->
-                    relayAndOutboundOp.connectEstablishedCallback = {
-                        it.writeAndFlush(encoded).also {
-                            //remove all useless listener
-                            originCTX.pipeline().cleanHandlers()
-                        }
-                    }
-                    relayAndOutboundOp.connectFail = {
-                        originCTX.close()
+            relayAndOutbound(RelayAndOutboundOp(
+                originCTX = originCTX, outbound = outbound, odor = odor
+            ).also { relayAndOutboundOp ->
+                relayAndOutboundOp.connectEstablishedCallback = {
+                    it.writeAndFlush(encoded).also {
+                        //remove all useless listener
+                        originCTX.pipeline().cleanHandlers()
                     }
                 }
-            )
+                relayAndOutboundOp.connectFail = {
+                    originCTX.close()
+                }
+            })
         }
 
     }
@@ -110,31 +111,27 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
 
         val resolveOutbound = resolveOutbound(inbound, odor)
         resolveOutbound.ifPresent { outbound ->
-            relayAndOutbound(
-                RelayAndOutboundOp(
-                    originCTX = originCTX,
-                    outbound = outbound,
-                    odor = odor
-                ).also { relayAndOutboundOp ->
-                    relayAndOutboundOp.connectEstablishedCallback = {
-                        //write Connection Established
-                        originCTX.writeAndFlush(
-                            DefaultHttpResponse(
-                                version,
-                                HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
-                            )
-                        ).also {
-                            //remove all useless listener
-                           originCTX.pipeline().cleanHandlers()
-                        }
-                    }
-                    relayAndOutboundOp.connectFail = {
-                        //todo: When the remote cannot be connected, the origin needs to be notified correctly
-                        logger.warn { "[${originCTX.channel().id().asShortText()}] connect to remote fail" }
-                        originCTX.close()
+            relayAndOutbound(RelayAndOutboundOp(
+                originCTX = originCTX, outbound = outbound, odor = odor
+            ).also { relayAndOutboundOp ->
+                relayAndOutboundOp.connectEstablishedCallback = {
+                    //write Connection Established
+                    originCTX.writeAndFlush(
+                        DefaultHttpResponse(
+                            version,
+                            HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
+                        )
+                    ).also {
+                        //remove all useless listener
+                        originCTX.pipeline().cleanHandlers()
                     }
                 }
-            )
+                relayAndOutboundOp.connectFail = {
+                    //todo: When the remote cannot be connected, the origin needs to be notified correctly
+                    logger.warn { "[${originCTX.channel().id().asShortText()}] connect to remote fail" }
+                    originCTX.close()
+                }
+            })
         }
     }
 }
