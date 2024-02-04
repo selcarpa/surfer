@@ -34,7 +34,10 @@ import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.WebsocketDuplexHandler
 import stream.relayAndOutbound
-import utils.*
+import utils.closeOnFlush
+import utils.toAddressType
+import utils.toSha224
+import utils.toUUid
 import java.net.InetSocketAddress
 import java.net.URI
 
@@ -170,11 +173,13 @@ class TrojanProxy(
     private val streamBy: Protocol,
 ) : ProxyHandler(socketAddress) {
     companion object {
-        val setConnectSuccess =
+        private val setConnectSuccess =
             ProxyHandler::class.java.declaredMethods.find { it.name == "setConnectSuccess" }!!.also {
                 it.isAccessible = true
             }
     }
+
+    private val setThisConnectSuccess = { setConnectSuccess.invoke(this) }
 
     private val logger = KotlinLogging.logger { }
 
@@ -206,7 +211,7 @@ class TrojanProxy(
             Protocol.TCP -> {
                 addPreHandledTcp(ctx)
                 p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-                p.addLast("AutoSuccessHandler", AutoSuccessHandler { setConnectSuccess.invoke(this) })
+                p.addLast("AutoSuccessHandler", AutoSuccessHandler { setThisConnectSuccess() })
             }
 
             Protocol.TLS -> {
@@ -262,7 +267,7 @@ class TrojanProxy(
         )
         //fixme: trojan proxy via websocket should not setConnectSuccess here
         ctx.pipeline().addLast("AutoSuccessHandler", AutoSuccessHandler {
-            setConnectSuccess.invoke(this@TrojanProxy)
+            setThisConnectSuccess()
         })
 
         val newPromise = ctx.channel().eventLoop().newPromise<Channel>()
@@ -287,7 +292,7 @@ class TrojanProxy(
             override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
                 if (evt is SslCompletionEvent) {
                     ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-                    setConnectSuccess.invoke(this@TrojanProxy)
+                    setThisConnectSuccess()
                     ctx.pipeline().remove(this)
                     return
                 }
