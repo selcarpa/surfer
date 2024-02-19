@@ -24,7 +24,7 @@ dependencies {
 //    implementation("net.peanuuutz:tomlkt:0.2.0")
     //kotlin-logging
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
-    implementation("ch.qos.logback:logback-classic:1.4.14")
+    implementation("ch.qos.logback:logback-classic:1.5.0")
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.2")
 
