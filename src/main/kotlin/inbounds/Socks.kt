@@ -91,7 +91,7 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
     private fun socks5DoAuth(socksRequest: Socks5PasswordAuthRequest, ctx: ChannelHandlerContext) {
         if (inbound.socks5Setting?.auth?.username != socksRequest.username() || inbound.socks5Setting?.auth?.password != socksRequest.password()) {
             logger.warn {
-                "${ctx.channel().id().asShortText()} socks5 auth failed from: ${
+                "[${ctx.channel().id().asShortText()}] socks5 auth failed from: ${
                     ctx.channel().remoteAddress()
                 }"
             }

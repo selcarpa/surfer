@@ -47,6 +47,12 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
         val portInboundMap =
             Configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
+
+        val map= mutableMapOf<Int,Inbound>()
+        for (inbound in Configuration.inbounds) {
+            map.put(inbound.port,inbound)
+        }
+
         val inbound = portInboundMap[localAddress.port]
         ch.pipeline().addFirst(LOG_HANDLER, LoggingHandler(LogLevel.TRACE))
         //todo: set idle timeout, and close channel
@@ -97,24 +103,12 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
     private fun initTrojanInbound(ch: NioSocketChannel, inbound: Inbound) {
         when (Protocol.valueOfOrNull(inbound.inboundStreamBy!!.type)) {
             Protocol.WS -> {
-                val handleShakePromise = ch.eventLoop().next().newPromise<Channel>()
-                handleShakePromise.addListener(FutureListener { future ->
-                    if (future.isSuccess) {
-                        future.get().pipeline().addLast(TrojanInboundHandler(inbound))
-                    }
-                })
-
+                val handleShakePromise = trojanInboundAddPromise(ch, inbound)
                 initWebsocketInbound(ch, inbound.inboundStreamBy.wsInboundSetting!!, handleShakePromise)
             }
 
             Protocol.TLS -> {
-                val handleShakePromise = ch.eventLoop().next().newPromise<Channel>()
-                handleShakePromise.addListener(FutureListener { future ->
-                    if (future.isSuccess) {
-                        future.get().pipeline().addLast(TrojanInboundHandler(inbound))
-                    }
-                })
-
+                val handleShakePromise = trojanInboundAddPromise(ch, inbound)
                 initTlsInbound(ch, inbound.inboundStreamBy.tlsInboundSetting!!, handleShakePromise)
             }
 
@@ -129,6 +123,19 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
             }
         }
 
+    }
+
+    private fun trojanInboundAddPromise(
+        ch: NioSocketChannel,
+        inbound: Inbound
+    ): Promise<Channel> {
+        val handleShakePromise = ch.eventLoop().next().newPromise<Channel>()
+        handleShakePromise.addListener(FutureListener { future ->
+            if (future.isSuccess) {
+                future.get().pipeline().addLast(TrojanInboundHandler(inbound))
+            }
+        })
+        return handleShakePromise
     }
 
     private fun initTlsInbound(
