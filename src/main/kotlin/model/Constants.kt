@@ -6,6 +6,7 @@ const val TROJAN_PROXY_OUTBOUND = "trojan_proxy_outbound"
 const val LOG_HANDLER = "log_handler"
 const val IDLE_CLOSE_HANDLER = "idle_close_handler"
 const val IDLE_CHECK_HANDLER = "idle_check_handler"
+const val GLOBAL_TRAFFIC_SHAPING = "global_traffic_shaping"
 
 
 enum class LogLevel {

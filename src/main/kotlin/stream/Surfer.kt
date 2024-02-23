@@ -16,10 +16,7 @@ import io.netty.handler.timeout.IdleStateHandler
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
-import model.IDLE_CHECK_HANDLER
-import model.IDLE_CLOSE_HANDLER
-import model.PROXY_HANDLER_NAME
-import model.RELAY_HANDLER_NAME
+import model.*
 import model.config.HttpOutboundSetting
 import model.config.Outbound
 import model.config.Sock5OutboundSetting
@@ -27,6 +24,7 @@ import model.protocol.Odor
 import model.protocol.Protocol
 import mu.KotlinLogging
 import netty.IdleCloseHandler
+import netty.ProxyChannelInitializer
 import protocol.DiscardHandler
 import protocol.TrojanProxy
 import utils.closeOnFlush
@@ -243,6 +241,7 @@ private fun connect(
 class SurferInitializer(private val handlerPairs: (Channel) -> MutableList<HandlerPair>) :
     ChannelInitializer<Channel>() {
     override fun initChannel(ch: Channel) {
+        ch.pipeline().addFirst(GLOBAL_TRAFFIC_SHAPING, ProxyChannelInitializer.globalTrafficShapingHandler)
         //todo: set idle timeout, and close channel
         ch.pipeline().addFirst(IDLE_CLOSE_HANDLER, IdleCloseHandler())
         ch.pipeline().addFirst(IDLE_CHECK_HANDLER, IdleStateHandler(300, 300, 300))

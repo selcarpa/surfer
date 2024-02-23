@@ -9,12 +9,10 @@ import io.netty.bootstrap.UkcpServerBootstrap
 import io.netty.channel.EventLoopGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
-import io.netty.handler.logging.ByteBufFormat
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.util.concurrent.DefaultThreadFactory
 import io.netty.util.concurrent.ThreadPerTaskExecutor
-import model.LOG_HANDLER
 import model.config.Config.Configuration
 import model.config.Inbound
 import model.protocol.Protocol
@@ -31,7 +29,7 @@ object NettyServer {
 
     private val bossGroup: EventLoopGroup =
         NioEventLoopGroup(1, ThreadPerTaskExecutor(DefaultThreadFactory("BossGroup")))
-    private val workerGroup: EventLoopGroup =
+    val workerGroup: EventLoopGroup =
         NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
 
     /**
@@ -45,7 +43,7 @@ object NettyServer {
             //tcp
             val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup)
                 .channel(NioServerSocketChannel::class.java)
-                .handler( LoggingHandler(LogLevel.TRACE))
+                .handler(LoggingHandler(LogLevel.TRACE))
                 .childHandler(ProxyChannelInitializer())
             it.stream()
                 .filter { inbound -> transmissionAssert(inbound, Protocol.TCP) }

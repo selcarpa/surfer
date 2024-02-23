@@ -2,8 +2,8 @@ package log
 
 import io.netty.buffer.ByteBufAllocator
 import io.netty.buffer.ByteBufAllocatorMetricProvider
+import kotlinx.coroutines.delay
 import mu.KotlinLogging
-import java.util.concurrent.Executors
 
 
 private val logger = KotlinLogging.logger {}
@@ -13,10 +13,11 @@ fun memoryStatisticPrint() {
 
 }
 
-fun startMemoryStatisticPrint() {
-    Executors.newSingleThreadScheduledExecutor().scheduleAtFixedRate(
-        { memoryStatisticPrint() }, 0, 1, java.util.concurrent.TimeUnit.SECONDS
-    )
+suspend fun startMemoryStatisticPrintPerSeconds() {
+    while (true) {
+        memoryStatisticPrint()
+        delay(1000)
+    }
 }
 
 

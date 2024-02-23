@@ -17,8 +17,10 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.stream.ChunkedWriteHandler
 import io.netty.handler.timeout.IdleStateHandler
+import io.netty.handler.traffic.GlobalTrafficShapingHandler
 import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
+import model.GLOBAL_TRAFFIC_SHAPING
 import model.IDLE_CHECK_HANDLER
 import model.IDLE_CLOSE_HANDLER
 import model.LOG_HANDLER
@@ -39,6 +41,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
     companion object {
         private val logger = KotlinLogging.logger {}
+        val globalTrafficShapingHandler = GlobalTrafficShapingHandler(NettyServer.workerGroup, 1000)
     }
 
     override fun initChannel(ch: NioSocketChannel) {
@@ -48,9 +51,9 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
         val portInboundMap =
             Configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
 
-        val map= mutableMapOf<Int,Inbound>()
+        val map = mutableMapOf<Int, Inbound>()
         for (inbound in Configuration.inbounds) {
-            map.put(inbound.port,inbound)
+            map[inbound.port] = inbound
         }
 
         val inbound = portInboundMap[localAddress.port]
@@ -58,6 +61,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
         //todo: set idle timeout, and close channel
         ch.pipeline().addFirst(IDLE_CLOSE_HANDLER, IdleCloseHandler())
         ch.pipeline().addFirst(IDLE_CHECK_HANDLER, IdleStateHandler(300, 300, 300))
+        ch.pipeline().addFirst(GLOBAL_TRAFFIC_SHAPING, globalTrafficShapingHandler)
         if (inbound != null) {
             when (Protocol.valueOfOrNull(inbound.protocol)) {
                 Protocol.HTTP -> {
@@ -118,7 +122,11 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
             }
 
             else -> {
-                logger.error("[${ch.id().asShortText()}] not support inbound stream by: ${inbound.inboundStreamBy.type}")
+                logger.error(
+                    "[${
+                        ch.id().asShortText()
+                    }] not support inbound stream by: ${inbound.inboundStreamBy.type}"
+                )
                 ch.close()
             }
         }
