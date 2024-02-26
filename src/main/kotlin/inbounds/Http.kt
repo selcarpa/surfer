@@ -17,11 +17,8 @@ import stream.relayAndOutbound
 import utils.cleanHandlers
 import java.net.URI
 
-
+private val logger = KotlinLogging.logger {}
 class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<HttpRequest>(false) {
-    companion object {
-        private val logger = KotlinLogging.logger {}
-    }
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
         logger.warn { "[${ctx.channel().id().asShortText()}] channel inactive" }

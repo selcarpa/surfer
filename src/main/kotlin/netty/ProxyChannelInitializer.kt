@@ -1,6 +1,7 @@
 package netty
 
 
+import inbounds.ApiHandle
 import inbounds.HttpProxyServerHandler
 import inbounds.SocksServerHandler
 import io.netty.channel.Channel
@@ -33,14 +34,15 @@ import mu.KotlinLogging
 import protocol.TrojanInboundHandler
 import stream.SslActiveHandler
 import stream.WebsocketDuplexHandler
+import utils.closeOnFlush
 import java.io.File
 import java.util.function.Function
 import java.util.stream.Collectors
 
+private val logger = KotlinLogging.logger {}
 class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
     companion object {
-        private val logger = KotlinLogging.logger {}
         val globalTrafficShapingHandler = GlobalTrafficShapingHandler(NettyServer.workerGroup, 1000)
     }
 
@@ -66,27 +68,35 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
             when (Protocol.valueOfOrNull(inbound.protocol)) {
                 Protocol.HTTP -> {
                     initHttpInbound(ch, inbound)
-                    return
                 }
 
                 Protocol.SOCKS5 -> {
                     initSocksInbound(ch, inbound)
-                    return
                 }
 
                 Protocol.TROJAN -> {
                     initTrojanInbound(ch, inbound)
-                    return
+                }
+
+                Protocol.API -> {
+                    initApiInbound(ch, inbound)
                 }
 
                 else -> {
-                    //ignored
+                    logger.error("[${ch.id().asShortText()}] not support inbound: ${inbound.protocol}")
+                    ch.closeOnFlush()
                 }
             }
         }
-        logger.error("[${ch.id().asShortText()}] not support inbound: ${inbound?.protocol}")
-        ch.close()
+    }
 
+    private fun initApiInbound(ch: NioSocketChannel, inbound: Inbound) {
+        ch.pipeline().addLast(
+            ChunkedWriteHandler(),
+            HttpServerCodec(),
+            HttpObjectAggregator(Int.MAX_VALUE)
+        )
+        ch.pipeline().addLast(ApiHandle(inbound))
     }
 
     private fun initSocksInbound(ch: NioSocketChannel, inbound: Inbound) {

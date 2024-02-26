@@ -4,19 +4,19 @@ import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.handler.timeout.IdleStateEvent
 import mu.KotlinLogging
+import utils.closeOnFlush
+
+private val logger = KotlinLogging.logger {}
 
 /**
  * when channel idle, close it
  */
 class IdleCloseHandler : ChannelInboundHandlerAdapter() {
-    companion object {
-        private val logger = KotlinLogging.logger {}
-    }
 
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
         when (evt) {
             is IdleStateEvent -> {
-                ctx.close()
+                ctx.channel().closeOnFlush()
             }
         }
         logger.trace { "[${ctx.channel().id()}] userEventTriggered: $evt" }

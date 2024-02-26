@@ -17,10 +17,9 @@ import stream.RelayAndOutboundOp
 import stream.relayAndOutbound
 import utils.closeOnFlush
 
+private val logger = KotlinLogging.logger {}
+
 class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
-    companion object {
-        private val logger = KotlinLogging.logger {}
-    }
 
     private var authed = false
 
@@ -37,10 +36,6 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
      * socks5 connect
      */
     private fun socks5Connect(ctx: ChannelHandlerContext, socksRequest: SocksMessage) {
-        if (inbound.protocol != "socks5") {
-            ctx.close()
-            return
-        }
         when (socksRequest) {
             is Socks5InitialRequest -> {
                 socks5auth(ctx)
@@ -118,9 +113,6 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
 @Sharable
 class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
 
-    companion object {
-        private val logger = KotlinLogging.logger {}
-    }
 
     public override fun channelRead0(originCTX: ChannelHandlerContext, message: SocksMessage) {
         when (message) {

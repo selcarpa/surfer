@@ -71,6 +71,7 @@ data class Inbound(
     val inboundStreamBy: InboundStreamBy?,
     val socks5Setting: Socks5Setting?,
     val trojanSetting: TrojanSetting?,
+    val apiSetting: ApiSetting?,
     val tag: String?
 )
 
@@ -125,6 +126,9 @@ data class WsInboundSetting(val path: String)
 
 @Serializable
 data class TrojanSetting(val password: String)
+
+@Serializable
+data class ApiSetting(var password: String = "")
 
 @Serializable
 data class LogConfiguration(

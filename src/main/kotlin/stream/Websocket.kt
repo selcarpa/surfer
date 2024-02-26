@@ -13,12 +13,10 @@ import io.netty.util.concurrent.FutureListener
 import io.netty.util.concurrent.Promise
 import mu.KotlinLogging
 
+private val logger = KotlinLogging.logger {}
 class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>? = null) :
     ChannelDuplexHandler() {
 
-    companion object {
-        private val logger = KotlinLogging.logger {}
-    }
 
     private var continuationBuffer: ByteBuf? = null
 

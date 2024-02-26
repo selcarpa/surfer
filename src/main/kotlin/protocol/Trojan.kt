@@ -41,10 +41,8 @@ import utils.toUUid
 import java.net.InetSocketAddress
 import java.net.URI
 
+private val logger = KotlinLogging.logger { }
 class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<ByteBuf>() {
-    companion object {
-        private val logger = KotlinLogging.logger { }
-    }
 
     private var removed = false
     override fun channelRead0(originCTX: ChannelHandlerContext, msg: ByteBuf) {

@@ -7,6 +7,7 @@ enum class Protocol(private val superProtocol: Protocol?) {
     HTTP(TCP),
     SOCKS5(TCP),
     UKCP(null),
+
     //websocket
     WS(HTTP),
 
@@ -20,7 +21,10 @@ enum class Protocol(private val superProtocol: Protocol?) {
     TROJAN(null),
 
     //galaxy is an outbound protocol
-    GALAXY(null)
+    GALAXY(null),
+
+    //API is a special protocol, it provides a way to interact with the server
+    API(null)
     ;
 
     companion object {
