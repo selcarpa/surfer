@@ -32,6 +32,21 @@ object NettyServer {
     val workerGroup: EventLoopGroup =
         NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
 
+    //tcp
+    val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup)
+        .channel(NioServerSocketChannel::class.java)
+        .handler(LoggingHandler(LogLevel.TRACE))
+        .childHandler(ProxyChannelInitializer())
+
+    //ukcp
+    val ukcpServerBootstrap = UkcpServerBootstrap().group(workerGroup)
+        .channel(UkcpServerChannel::class.java)
+        .childHandler(ProxyChannelInitializer()).also {
+            ChannelOptionHelper.nodelay(it, true, 20, 2, true)
+                .childOption(UkcpChannelOption.UKCP_MTU, 512)
+        }
+
+
     /**
      * start netty server
      * @param countDownLatch to wake up the blocked calling thread
@@ -40,11 +55,6 @@ object NettyServer {
 
         var tcpBind = false
         Optional.ofNullable(Configuration.inbounds).ifPresent {
-            //tcp
-            val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup)
-                .channel(NioServerSocketChannel::class.java)
-                .handler(LoggingHandler(LogLevel.TRACE))
-                .childHandler(ProxyChannelInitializer())
             it.stream()
                 .filter { inbound -> transmissionAssert(inbound, Protocol.TCP) }
                 .forEach { inbound ->
@@ -65,12 +75,6 @@ object NettyServer {
         }
         Optional.ofNullable(Configuration.inbounds).ifPresent {
             //ukcp
-            val ukcpServerBootstrap = UkcpServerBootstrap()
-            ukcpServerBootstrap.group(workerGroup)
-                .channel(UkcpServerChannel::class.java)
-                .childHandler(ProxyChannelInitializer())
-            ChannelOptionHelper.nodelay(ukcpServerBootstrap, true, 20, 2, true)
-                .childOption(UkcpChannelOption.UKCP_MTU, 512)
             it.stream()
                 .filter { inbound -> transmissionAssert(inbound, Protocol.UKCP) }
                 .forEach { inbound ->

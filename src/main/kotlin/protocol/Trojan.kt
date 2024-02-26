@@ -244,7 +244,7 @@ class TrojanProxy(
                 } else {
                     throw IllegalArgumentException("unsupported stream")
                 }
-            }://${outboundStreamBy!!.wsOutboundSetting!!.host}:${outboundStreamBy.wsOutboundSetting!!.port}/${
+            }://${outboundStreamBy.wsOutboundSetting!!.host}:${outboundStreamBy.wsOutboundSetting!!.port}/${
                 outboundStreamBy.wsOutboundSetting.path.removePrefix(
                     "/"
                 )
