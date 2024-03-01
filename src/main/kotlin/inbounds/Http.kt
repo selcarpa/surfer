@@ -18,6 +18,7 @@ import utils.cleanHandlers
 import java.net.URI
 
 private val logger = KotlinLogging.logger {}
+
 class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<HttpRequest>(false) {
 
     override fun channelInactive(ctx: ChannelHandlerContext) {
@@ -57,7 +58,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
         ch.writeOutbound(request)
         val encoded = ch.readOutbound<ByteBuf>()
         ch.close()
-        val resolveOutbound = resolveOutbound(inbound, odor)
+        val resolveOutbound = resolveOutbound(inbound.tag, odor)
 
         //This code actually prints out the client's request, in this case the request will be monitored. It is not safe to use proxy for http when you not trust in proxy provider
         logger.trace {
@@ -106,7 +107,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
         val version = request.protocolVersion()
         ReferenceCountUtil.release(request)
 
-        val resolveOutbound = resolveOutbound(inbound, odor)
+        val resolveOutbound = resolveOutbound(inbound.tag, odor)
         resolveOutbound.ifPresent { outbound ->
             relayAndOutbound(RelayAndOutboundOp(
                 originCTX = originCTX, outbound = outbound, odor = odor

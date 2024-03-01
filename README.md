@@ -67,14 +67,19 @@ java -jar surfer.jar -c=config.json
 {
   port: 14270,
   protocol: "socks5",
-  socks5Setting: {
-    //optional
-    auth: {
-      //optional, if not set, no authentication
-      username: "username",
-      password: "password"
+  //optional, if there is no settings, we think of it as one none-auth socks5Setting in the list
+  socks5Settings: [
+    {
+      //optional
+      auth: {
+        //optional, if not set, no authentication
+        username: "username",
+        password: "password"
+      },
+      //optional
+      tag: ""
     }
-  }
+  ]
 }
 ```
 
@@ -95,10 +100,14 @@ java -jar surfer.jar -c=config.json
     }
   },
   //when inbound protocol is trojan, this field is required
-  "trojanSetting": {
-    //password, must set
-    "password": "password"
-  }
+  "trojanSettings": [
+    {
+      //password, must set
+      "password": "password",
+      //optional
+      "tag": ""
+    }
+  ]
 }
 ```
 

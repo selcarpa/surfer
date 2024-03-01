@@ -31,7 +31,7 @@ import model.config.TlsInboundSetting
 import model.config.WsInboundSetting
 import model.protocol.Protocol
 import mu.KotlinLogging
-import protocol.TrojanInboundHandler
+import inbounds.TrojanInboundHandler
 import stream.SslActiveHandler
 import stream.WebsocketDuplexHandler
 import utils.closeOnFlush

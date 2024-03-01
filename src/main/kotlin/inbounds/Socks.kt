@@ -9,6 +9,7 @@ import io.netty.handler.codec.socksx.SocksMessage
 import io.netty.handler.codec.socksx.SocksVersion
 import io.netty.handler.codec.socksx.v5.*
 import model.config.Inbound
+import model.config.Socks5Setting
 import model.protocol.Odor
 import model.protocol.Protocol
 import mu.KotlinLogging
@@ -22,6 +23,7 @@ private val logger = KotlinLogging.logger {}
 class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
 
     private var authed = false
+    private var socks5Setting: Socks5Setting? = null
 
     public override fun channelRead0(ctx: ChannelHandlerContext, socksRequest: SocksMessage) {
         when (socksRequest.version()!!) {
@@ -46,11 +48,14 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
             }
 
             is Socks5CommandRequest -> {
-                if (inbound.socks5Setting?.auth != null || !authed) {
+                // because we compat with no socks5Setting item in socks5Settings,
+                // so we need to check if there's any socks5Setting, when there is none,
+                // we just think of does not need auth
+                if (!authed || (inbound.socks5Settings.isNotEmpty() && inbound.socks5Settings.none { it.auth == null })) {
                     ctx.close()
                 }
                 if (socksRequest.type() === Socks5CommandType.CONNECT) {
-                    ctx.pipeline().addLast(SocksServerConnectHandler(inbound))
+                    ctx.pipeline().addLast(SocksServerConnectHandler(inbound, socks5Setting))
                     ctx.pipeline().remove(this)
                     ctx.fireChannelRead(socksRequest)
                 } else {
@@ -69,7 +74,8 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
      * if there's auth configuration in inbound setting then do auth
      */
     private fun socks5auth(ctx: ChannelHandlerContext) {
-        if (inbound.socks5Setting?.auth != null) {
+        //if there is any auth configuration in inbound setting then do auth
+        if (inbound.socks5Settings.any { it.auth != null }) {
             ctx.pipeline().addFirst(Socks5PasswordAuthRequestDecoder())
             ctx.write(DefaultSocks5InitialResponse(Socks5AuthMethod.PASSWORD))
         } else {
@@ -84,19 +90,22 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
      * if there's auth configuration in inbound setting then do auth
      */
     private fun socks5DoAuth(socksRequest: Socks5PasswordAuthRequest, ctx: ChannelHandlerContext) {
-        if (inbound.socks5Setting?.auth?.username != socksRequest.username() || inbound.socks5Setting?.auth?.password != socksRequest.password()) {
-            logger.warn {
-                "[${ctx.channel().id().asShortText()}] socks5 auth failed from: ${
-                    ctx.channel().remoteAddress()
-                }"
-            }
-            ctx.write(DefaultSocks5PasswordAuthResponse(Socks5PasswordAuthStatus.FAILURE))
-            ctx.close()
-            return
+        inbound.socks5Settings.filter {
+            it.auth?.username != socksRequest.username() || it.auth?.password != socksRequest.password()
+        }.first {
+            ctx.pipeline().addFirst(Socks5CommandRequestDecoder())
+            ctx.write(DefaultSocks5PasswordAuthResponse(Socks5PasswordAuthStatus.SUCCESS))
+            authed = true
+            socks5Setting = it
+            return@socks5DoAuth
         }
-        ctx.pipeline().addFirst(Socks5CommandRequestDecoder())
-        ctx.write(DefaultSocks5PasswordAuthResponse(Socks5PasswordAuthStatus.SUCCESS))
-        authed = true
+        logger.warn {
+            "[${ctx.channel().id().asShortText()}] socks5 auth failed from: ${
+                ctx.channel().remoteAddress()
+            }"
+        }
+        ctx.write(DefaultSocks5PasswordAuthResponse(Socks5PasswordAuthStatus.FAILURE))
+        ctx.close()
     }
 
     override fun channelReadComplete(ctx: ChannelHandlerContext) {
@@ -111,7 +120,8 @@ class SocksServerHandler(private val inbound: Inbound) : SimpleChannelInboundHan
 }
 
 @Sharable
-class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<SocksMessage>() {
+class SocksServerConnectHandler(private val inbound: Inbound, private val socks5Setting: Socks5Setting?) :
+    SimpleChannelInboundHandler<SocksMessage>() {
 
 
     public override fun channelRead0(originCTX: ChannelHandlerContext, message: SocksMessage) {
@@ -137,7 +147,7 @@ class SocksServerConnectHandler(private val inbound: Inbound) : SimpleChannelInb
             },
             fromChannel = originCTX.channel().id().asShortText()
         )
-        val resolveOutbound = resolveOutbound(inbound, odor)
+        val resolveOutbound = resolveOutbound(socks5Setting?.tag ?: inbound.tag, odor)
         logger.info {
             "[${
                 originCTX.channel().id().asShortText()

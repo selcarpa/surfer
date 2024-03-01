@@ -3,9 +3,7 @@ package protocol
 
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
-import io.netty.buffer.Unpooled
 import io.netty.channel.*
-import io.netty.handler.codec.DecoderException
 import io.netty.handler.codec.http.DefaultHttpHeaders
 import io.netty.handler.codec.http.HttpClientCodec
 import io.netty.handler.codec.http.HttpObjectAggregator
@@ -21,7 +19,6 @@ import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.ReferenceCountUtil
 import model.TROJAN_PROXY_OUTBOUND
-import model.config.Inbound
 import model.config.Outbound
 import model.config.OutboundStreamBy
 import model.config.TrojanSetting
@@ -30,11 +27,7 @@ import model.protocol.Protocol
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
-import rule.resolveOutbound
-import stream.RelayAndOutboundOp
 import stream.WebsocketDuplexHandler
-import stream.relayAndOutbound
-import utils.closeOnFlush
 import utils.toAddressType
 import utils.toSha224
 import utils.toUUid
@@ -42,84 +35,6 @@ import java.net.InetSocketAddress
 import java.net.URI
 
 private val logger = KotlinLogging.logger { }
-class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<ByteBuf>() {
-
-    private var removed = false
-    override fun channelRead0(originCTX: ChannelHandlerContext, msg: ByteBuf) {
-        //parse trojan package
-        val trojanPackage = TrojanPackage.parse(msg)
-
-        if (ByteBufUtil.hexDump(
-                inbound.trojanSetting!!.password.toUUid().toString().toSha224().toByteArray()
-            ) == trojanPackage.hexSha224Password
-        ) {
-            logger.info(
-                "trojan inbound: [${
-                    originCTX.channel().id().asShortText()
-                }], addr: ${trojanPackage.request.host}:${trojanPackage.request.port}, cmd: ${
-                    Socks5CommandType.valueOf(
-                        trojanPackage.request.cmd
-                    )
-                }"
-            )
-            val odor = Odor(
-                host = trojanPackage.request.host,
-                port = trojanPackage.request.port,
-                originProtocol = Protocol.TROJAN,
-                desProtocol = if (Socks5CommandType.valueOf(trojanPackage.request.cmd) == Socks5CommandType.CONNECT) {
-                    Protocol.TCP
-                } else {
-                    Protocol.UDP
-                },
-                fromChannel = originCTX.channel().id().asShortText()
-            )
-            resolveOutbound(inbound = inbound, odor = odor).ifPresent { outbound ->
-                relayAndOutbound(RelayAndOutboundOp(
-                    originCTX = originCTX, outbound = outbound, odor = odor
-                ).also { relayAndOutboundOp ->
-                    relayAndOutboundOp.connectEstablishedCallback = {
-                        val payload = Unpooled.buffer()
-                        payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
-                        it.writeAndFlush(payload).addListener {
-                            //avoid remove this handler twice
-                            if (!removed) {
-                                //Trojan protocol only need package once, then send origin data directly
-                                originCTX.pipeline().remove(this)
-                                removed = true
-                            }
-                        }
-                    }
-                    relayAndOutboundOp.connectFail = {
-                        originCTX.channel().closeOnFlush()
-                    }
-                })
-            }
-        } else {
-            logger.warn { "${originCTX.channel().id().asShortText()}, drop trojan package, password not matched" }
-
-        }
-    }
-
-
-    @Suppress("OVERRIDE_DEPRECATION")
-    override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
-        if (cause is DecoderException || cause.cause is DecoderException) {
-            logger.warn {
-                "[${
-                    ctx.channel().id().asShortText()
-                }] parse trojan package failed, ${cause.message}, give a discard handler"
-            }
-            ctx.pipeline().forEach {
-                ctx.pipeline().remove(it.value)
-            }
-            removed = true
-            ctx.pipeline().addLast(DiscardHandler())
-            return
-        }
-        logger.error(cause) { "[${ctx.channel().id().asShortText()}], exception caught" }
-
-    }
-}
 
 class TrojanOutboundHandler(
     private val trojanSetting: TrojanSetting, private val trojanRequest: TrojanRequest
@@ -179,7 +94,6 @@ class TrojanProxy(
 
     private val setThisConnectSuccess = { setConnectSuccess.invoke(this) }
 
-    private val logger = KotlinLogging.logger { }
 
     constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),

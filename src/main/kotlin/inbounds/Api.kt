@@ -9,11 +9,12 @@ import model.config.Inbound
 
 class ApiHandle(private val inbound: Inbound) : SimpleChannelInboundHandler<HttpMessage>() {
     override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpMessage) {
-        if (inbound.apiSetting!!.password == "" || msg.headers()["auth"] != inbound.apiSetting.password) {
-            ctx.channel().writeAndFlush(DefaultHttpResponse(msg.protocolVersion(), HttpResponseStatus.UNAUTHORIZED))
+        inbound.apiSettings.filter {
+           msg.headers()["auth"] != it.password
+        }.first {
+            return@channelRead0
         }
-
-
+        ctx.channel().writeAndFlush(DefaultHttpResponse(msg.protocolVersion(), HttpResponseStatus.UNAUTHORIZED))
     }
 
 }

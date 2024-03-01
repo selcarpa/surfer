@@ -311,9 +311,6 @@ class ProxyChannelActiveHandler(private val promise: Promise<Channel>) : Channel
  */
 class RelayInboundHandler(private val relayChannel: Channel, private val inActiveCallBack: () -> Unit = {}) :
     ChannelInboundHandlerAdapter() {
-    companion object {
-        private val logger = KotlinLogging.logger {}
-    }
 
     override fun channelActive(ctx: ChannelHandlerContext) {
         ctx.writeAndFlush(Unpooled.EMPTY_BUFFER)

@@ -6,7 +6,7 @@
       "inboundStreamBy": {
         "type": "tcp"//stream by tcp, not recommended to use
       },
-      "trojanSetting": [
+      "trojanSettings": [
         {
           "password": ""//any String
         }

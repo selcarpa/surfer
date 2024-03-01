@@ -13,9 +13,9 @@ import java.util.*
 private val logger = KotlinLogging.logger {}
 
 
-fun resolveOutbound(inbound: Inbound, odor: Odor): Optional<Outbound> {
+fun resolveOutbound(inboundTag: String?, odor: Odor): Optional<Outbound> {
     val matchingRule = Configuration.rules.stream().filter {
-        matched(it, inbound, odor)
+        matched(it, inboundTag, odor)
     }.findFirst()
 
     if (matchingRule.isPresent) {
@@ -30,9 +30,9 @@ fun resolveOutbound(inbound: Inbound, odor: Odor): Optional<Outbound> {
     return Configuration.outbounds.stream().filter { true }.findFirst()
 }
 
-private fun matched(it: Rule, inbound: Inbound, odor: Odor): Boolean {
+private fun matched(it: Rule, inboundTag: String?, odor: Odor): Boolean {
     if (RuleType.valueOf(it.type.uppercase()) == RuleType.TAGGED) {
-        if (inbound.tag == it.tag) {
+        if (inboundTag == it.tag) {
             return true
         }
     } else if (RuleType.valueOf(it.type.uppercase()) == RuleType.SNIFFED) {

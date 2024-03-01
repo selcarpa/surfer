@@ -69,14 +69,14 @@ data class Inbound(
     val port: Int,
     val protocol: String,
     val inboundStreamBy: InboundStreamBy?,
-    val socks5Setting: Socks5Setting?,
-    val trojanSetting: TrojanSetting?,
-    val apiSetting: ApiSetting?,
+    var socks5Settings: List<Socks5Setting> = emptyList(),
+    var trojanSettings: List<TrojanSetting> = emptyList(),
+    var apiSettings: List<ApiSetting> = emptyList(),
     val tag: String?
 )
 
 @Serializable
-data class Socks5Setting(val auth: Auth?)
+data class Socks5Setting(val auth: Auth?, val tag: String?)
 
 @Serializable
 data class Auth(val password: String, val username: String)
@@ -125,7 +125,7 @@ data class WsOutboundSetting(val path: String, val port: Int, val host: String)
 data class WsInboundSetting(val path: String)
 
 @Serializable
-data class TrojanSetting(val password: String)
+data class TrojanSetting(val password: String, val tag: String?)
 
 @Serializable
 data class ApiSetting(var password: String = "")

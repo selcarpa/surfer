@@ -6,7 +6,7 @@
     {
       "port": 14270,
       "protocol": "socks5",
-      "socks5Setting": {
+      "socks5Settings": {
       }
     }
   ],
