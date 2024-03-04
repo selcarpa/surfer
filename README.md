@@ -57,7 +57,9 @@ java -jar surfer.jar -c=config.json
   //listen port
   port: 14270,
   //protocol
-  protocol: "http"
+  protocol: "http",
+  //optional, if not set, surfer only listen on "127.0.0.1"
+  listen:"127.0.0.1"
 }
 ```
 
@@ -67,6 +69,8 @@ java -jar surfer.jar -c=config.json
 {
   port: 14270,
   protocol: "socks5",
+  //optional, if not set, surfer only listen on "127.0.0.1"
+  listen:"127.0.0.1",
   //optional, if there is no settings, we think of it as one none-auth socks5Setting in the list
   socks5Settings: [
     {
@@ -89,6 +93,8 @@ java -jar surfer.jar -c=config.json
 {
   "protocol": "trojan",
   "port": 14270,
+  //optional, if not set, surfer only listen on "127.0.0.1"
+  listen:"127.0.0.1",
   //when inbound protocol is trojan, this field is required
   "inboundStreamBy": {
     //ws is only supported now

@@ -24,7 +24,7 @@ enum class Protocol(private val superProtocol: Protocol?) {
     GALAXY(null),
 
     //API is a special protocol, it provides a way to interact with the server
-    API(null)
+    API(HTTP)
     ;
 
     companion object {

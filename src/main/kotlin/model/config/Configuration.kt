@@ -10,7 +10,7 @@ import java.util.stream.Collectors
 private var rulesOrdered = false
 
 @OptIn(ExperimentalSerializationApi::class)
-private val json = Json {
+val json = Json {
     isLenient = true
     ignoreUnknownKeys = true
     explicitNulls = false
@@ -47,7 +47,7 @@ object Config {
 
 @Serializable
 data class ConfigurationSettings(
-    val inbounds: List<Inbound>, val outbounds: List<Outbound>
+    var inbounds: MutableList<Inbound> = mutableListOf(), val outbounds: List<Outbound>
 ) {
     var rules: List<Rule> = mutableListOf()
         get() {
@@ -72,7 +72,8 @@ data class Inbound(
     var socks5Settings: List<Socks5Setting> = emptyList(),
     var trojanSettings: List<TrojanSetting> = emptyList(),
     var apiSettings: List<ApiSetting> = emptyList(),
-    val tag: String?
+    val tag: String?,
+    var listen: String = "127.0.0.1"
 )
 
 @Serializable

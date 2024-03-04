@@ -17,7 +17,6 @@ import model.config.Config.Configuration
 import model.config.Inbound
 import model.protocol.Protocol
 import mu.KotlinLogging
-import java.util.*
 import java.util.concurrent.CountDownLatch
 import kotlin.system.exitProcess
 
@@ -52,46 +51,69 @@ object NettyServer {
      * @param countDownLatch to wake up the blocked calling thread
      */
     fun start(countDownLatch: CountDownLatch? = null) {
-
         var tcpBind = false
-        Optional.ofNullable(Configuration.inbounds).ifPresent {
-            it.stream()
-                .filter { inbound -> transmissionAssert(inbound, Protocol.TCP) }
-                .forEach { inbound ->
-                    tcpBootstrap.bind(inbound.port).addListener { future ->
-                        if (future.isSuccess) {
-                            logger.info("${inbound.protocol} bind ${inbound.port} success")
-                            countDownLatch?.countDown()
-                        } else {
-                            logger.error("bind ${inbound.port} fail, reason:${future.cause().message}")
-                            exitProcess(1)
-                        }
+        Configuration.inbounds.groupBy { inbound -> Protocol.valueOfOrNull(inbound.protocol).topProtocol() }.forEach {
+            when (it.key) {
+                Protocol.TCP -> {
+                    it.value.forEach { inbound ->
+                        tcpBind(inbound, { countDownLatch?.countDown() }, { exitProcess(1) })
+                        tcpBind = true
                     }
-                    tcpBind = true
+
                 }
+
+                Protocol.UKCP -> {
+                    it.value.forEach { inbound ->
+                        ukcpBind(inbound, { countDownLatch?.countDown() }, { exitProcess(1) })
+                    }
+                }
+
+                else -> {
+                    logger.error { "unsupported top protocol ${it.key}" }
+                }
+            }
         }
+
         if (!tcpBind) {
             logger.debug { "no tcp inbound" }
-        }
-        Optional.ofNullable(Configuration.inbounds).ifPresent {
-            //ukcp
-            it.stream()
-                .filter { inbound -> transmissionAssert(inbound, Protocol.UKCP) }
-                .forEach { inbound ->
-                    ukcpServerBootstrap.bind(inbound.port).addListener { future ->
-                        if (future.isSuccess) {
-                            logger.info("${inbound.protocol} bind ${inbound.port} success")
-                            countDownLatch?.countDown()
-                        } else {
-                            logger.error("bind ${inbound.port} fail, reason:${future.cause().message}")
-                            exitProcess(1)
-                        }
-                    }
-                }
         }
         Runtime.getRuntime().addShutdownHook(Thread({ close() }, "bye"))
     }
 
+
+    /**
+     * bind ukcp port
+     */
+    fun ukcpBind(inbound: Inbound, success: (() -> Unit)? = null, fail: (() -> Unit)? = null) {
+        ukcpServerBootstrap.bind(inbound.listen, inbound.port).addListener { future ->
+            if (future.isSuccess) {
+                logger.info("${inbound.protocol} bind ${inbound.port} success")
+                success?.let { it() }
+            } else {
+                logger.error("bind ${inbound.port} fail, reason:${future.cause().message}")
+                fail?.let { it() }
+            }
+        }
+    }
+
+    /**
+     * bind tcp port
+     */
+    fun tcpBind(inbound: Inbound, success: (() -> Unit)? = null, fail: (() -> Unit)? = null) {
+        tcpBootstrap.bind(inbound.listen, inbound.port).addListener { future ->
+            if (future.isSuccess) {
+                logger.info("${inbound.protocol} bind ${inbound.port} success")
+                success?.let { it() }
+            } else {
+                logger.error("bind ${inbound.port} fail, reason:${future.cause().message}")
+                fail?.let { it() }
+            }
+        }
+    }
+
+    /**
+     * assert transmission protocol
+     */
     private fun transmissionAssert(inbound: Inbound, desProtocol: Protocol): Boolean {
         var protocol = Protocol.valueOfOrNull(inbound.protocol).topProtocol()
         if (protocol == desProtocol) {

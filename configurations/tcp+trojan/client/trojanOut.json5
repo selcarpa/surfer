@@ -2,11 +2,13 @@
   "inbounds": [
     {
       port: 14270,//local port
-      protocol: "socks5"
+      protocol: "socks5",
+      listen:"0.0.0.0"
     },
     {
       port: 14272,//local port
-      protocol: "http"
+      protocol: "http",
+      listen:"0.0.0.0"
     }
   ],
   "outbounds": [

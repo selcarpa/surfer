@@ -1,20 +1,85 @@
 package inbounds
 
+import io.netty.buffer.Unpooled
+import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
-import io.netty.handler.codec.http.DefaultHttpResponse
-import io.netty.handler.codec.http.HttpMessage
-import io.netty.handler.codec.http.HttpResponseStatus
+import io.netty.handler.codec.http.*
+import io.netty.util.ReferenceCountUtil
+import kotlinx.serialization.encodeToString
+import model.config.Config.Configuration
 import model.config.Inbound
+import model.config.json
+import model.protocol.Protocol
+import mu.KotlinLogging
+import netty.NettyServer
 
-class ApiHandle(private val inbound: Inbound) : SimpleChannelInboundHandler<HttpMessage>() {
-    override fun channelRead0(ctx: ChannelHandlerContext, msg: HttpMessage) {
+private val logger = KotlinLogging.logger {}
+
+class ApiHandle(private val inbound: Inbound) : SimpleChannelInboundHandler<FullHttpRequest>() {
+    override fun channelRead0(ctx: ChannelHandlerContext, request: FullHttpRequest) {
+
+        if (inbound.apiSettings.isEmpty()) {
+            val doCall = endpoints[request.uri()]
+            if (doCall != null) {
+                doCall(request, ctx.channel())
+            } else {
+                ctx.channel()
+                    .writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.NOT_FOUND))
+                ctx.close()
+            }
+            return
+        }
+
         inbound.apiSettings.filter {
-           msg.headers()["auth"] != it.password
+            request.headers()["auth"] != it.password
         }.first {
             return@channelRead0
         }
-        ctx.channel().writeAndFlush(DefaultHttpResponse(msg.protocolVersion(), HttpResponseStatus.UNAUTHORIZED))
+        ctx.channel().writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.UNAUTHORIZED))
     }
 
+}
+
+
+val endpoints = mapOf(
+    "/addInbound" to ::addInbound,
+    "/export/configuration" to ::downloadConfiguration,
+)
+
+fun addInbound(request: FullHttpRequest, channel: Channel) {
+    val inbound = json.decodeFromString<Inbound>(request.content().toString(Charsets.UTF_8))
+    Configuration.inbounds.add(inbound)
+
+    when (Protocol.valueOfOrNull(inbound.protocol).topProtocol()) {
+        Protocol.TCP -> {
+            NettyServer.tcpBind(inbound)
+            channel.writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.OK))
+            channel.close()
+        }
+
+        Protocol.UKCP -> {
+            NettyServer.ukcpBind(inbound)
+            channel.writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.OK))
+            channel.close()
+        }
+
+        else -> {
+            logger.error { "unsupported top protocol ${Protocol.valueOfOrNull(inbound.protocol).topProtocol()}" }
+        }
+    }
+
+}
+
+fun downloadConfiguration(request: FullHttpRequest, channel: Channel) {
+    val configuration = json.encodeToString(Configuration)
+
+    val response = DefaultFullHttpResponse(
+        request.protocolVersion(),
+        HttpResponseStatus.OK,
+        ReferenceCountUtil.releaseLater(Unpooled.wrappedBuffer(configuration.toByteArray()))
+    )
+    response.headers().add(HttpHeaderNames.CONTENT_TYPE, "application/json")
+    channel.writeAndFlush(response)
+    channel.close()
 }
