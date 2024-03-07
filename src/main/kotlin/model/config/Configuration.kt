@@ -4,6 +4,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import java.io.File
+import java.util.UUID
 import java.util.regex.Pattern
 import java.util.stream.Collectors
 
@@ -66,6 +67,7 @@ data class ConfigurationSettings(
 
 @Serializable
 data class Inbound(
+    var id: String = UUID.randomUUID().toString(),
     val port: Int,
     val protocol: String,
     val inboundStreamBy: InboundStreamBy?,

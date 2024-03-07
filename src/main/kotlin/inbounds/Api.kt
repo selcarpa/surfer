@@ -13,6 +13,7 @@ import model.config.json
 import model.protocol.Protocol
 import mu.KotlinLogging
 import netty.NettyServer
+import netty.NettyServer.portInboundBinds
 
 private val logger = KotlinLogging.logger {}
 
@@ -43,7 +44,8 @@ class ApiHandle(private val inbound: Inbound) : SimpleChannelInboundHandler<Full
 
 
 val endpoints = mapOf(
-    "/addInbound" to ::addInbound,
+    "/add/inbound" to ::addInbound,
+    "/remove/inbound/by/id" to ::removeInboundById,
     "/export/configuration" to ::downloadConfiguration,
 )
 
@@ -81,5 +83,35 @@ fun downloadConfiguration(request: FullHttpRequest, channel: Channel) {
     )
     response.headers().add(HttpHeaderNames.CONTENT_TYPE, "application/json")
     channel.writeAndFlush(response)
+    channel.close()
+}
+
+fun removeInboundById(request: FullHttpRequest, channel: Channel) {
+    val id = request.content().toString(Charsets.UTF_8)
+    Configuration.inbounds.removeIf { it.id == id }
+    val portInboundBind = portInboundBinds.first {
+        it.second == id
+    }
+    when (Protocol.valueOfOrNull(portInboundBind.third.protocol).topProtocol()) {
+        Protocol.TCP -> {
+            channel.writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.OK))
+            channel.close()
+        }
+
+        Protocol.UKCP -> {
+            channel.writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.OK))
+            channel.close()
+        }
+
+        else -> {
+            logger.error {
+                "unsupported top protocol ${
+                    Protocol.valueOfOrNull(portInboundBind.third.protocol).topProtocol()
+                }"
+            }
+        }
+    }
+
+    channel.writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.NOT_FOUND))
     channel.close()
 }

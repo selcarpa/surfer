@@ -26,6 +26,8 @@ import kotlin.system.exitProcess
 object NettyServer {
     private val logger = KotlinLogging.logger {}
 
+    val portInboundBinds = mutableListOf<Triple<Int, String, Inbound>>()
+
     private val bossGroup: EventLoopGroup =
         NioEventLoopGroup(1, ThreadPerTaskExecutor(DefaultThreadFactory("BossGroup")))
     val workerGroup: EventLoopGroup =
@@ -56,7 +58,10 @@ object NettyServer {
             when (it.key) {
                 Protocol.TCP -> {
                     it.value.forEach { inbound ->
-                        tcpBind(inbound, { countDownLatch?.countDown() }, { exitProcess(1) })
+                        tcpBind(inbound, {
+                            countDownLatch?.countDown();
+                            portInboundBinds.add(Triple(inbound.port, inbound.id, inbound))
+                        }, { exitProcess(1) })
                         tcpBind = true
                     }
 
@@ -64,7 +69,10 @@ object NettyServer {
 
                 Protocol.UKCP -> {
                     it.value.forEach { inbound ->
-                        ukcpBind(inbound, { countDownLatch?.countDown() }, { exitProcess(1) })
+                        ukcpBind(inbound, {
+                            countDownLatch?.countDown()
+                            portInboundBinds.add(Triple(inbound.port, inbound.id, inbound))
+                        }, { exitProcess(1) })
                     }
                 }
 
@@ -102,31 +110,13 @@ object NettyServer {
     fun tcpBind(inbound: Inbound, success: (() -> Unit)? = null, fail: (() -> Unit)? = null) {
         tcpBootstrap.bind(inbound.listen, inbound.port).addListener { future ->
             if (future.isSuccess) {
-                logger.info("${inbound.protocol} bind ${inbound.port} success")
+                logger.info("id:${inbound.id}, ${inbound.protocol} bind ${inbound.port} success")
                 success?.let { it() }
             } else {
-                logger.error("bind ${inbound.port} fail, reason:${future.cause().message}")
+                logger.error("id:${inbound.id}, bind ${inbound.port} fail, reason:${future.cause().message}")
                 fail?.let { it() }
             }
         }
-    }
-
-    /**
-     * assert transmission protocol
-     */
-    private fun transmissionAssert(inbound: Inbound, desProtocol: Protocol): Boolean {
-        var protocol = Protocol.valueOfOrNull(inbound.protocol).topProtocol()
-        if (protocol == desProtocol) {
-            return true
-        }
-        if (inbound.inboundStreamBy != null) {
-            protocol = Protocol.valueOfOrNull(inbound.inboundStreamBy.type)
-            protocol = protocol.topProtocol()
-            if (protocol == desProtocol) {
-                return true
-            }
-        }
-        return false
     }
 
     /**

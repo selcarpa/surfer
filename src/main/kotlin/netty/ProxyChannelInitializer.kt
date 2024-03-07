@@ -25,21 +25,20 @@ import model.GLOBAL_TRAFFIC_SHAPING
 import model.IDLE_CHECK_HANDLER
 import model.IDLE_CLOSE_HANDLER
 import model.LOG_HANDLER
-import model.config.Config.Configuration
 import model.config.Inbound
 import model.config.TlsInboundSetting
 import model.config.WsInboundSetting
 import model.protocol.Protocol
 import mu.KotlinLogging
 import inbounds.TrojanInboundHandler
+import netty.NettyServer.portInboundBinds
 import stream.SslActiveHandler
 import stream.WebsocketDuplexHandler
 import utils.closeOnFlush
 import java.io.File
-import java.util.function.Function
-import java.util.stream.Collectors
 
 private val logger = KotlinLogging.logger {}
+
 class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
     companion object {
@@ -50,15 +49,9 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
         val localAddress = ch.localAddress()
 
-        val portInboundMap =
-            Configuration.inbounds.stream().collect(Collectors.toMap(Inbound::port, Function.identity()))
-
-        val map = mutableMapOf<Int, Inbound>()
-        for (inbound in Configuration.inbounds) {
-            map[inbound.port] = inbound
-        }
-
-        val inbound = portInboundMap[localAddress.port]
+        val inbound = portInboundBinds.first {
+            localAddress.port == it.first
+        }.third
         ch.pipeline().addFirst(LOG_HANDLER, LoggingHandler(LogLevel.TRACE))
         //todo: set idle timeout, and close channel
         ch.pipeline().addFirst(IDLE_CLOSE_HANDLER, IdleCloseHandler())
@@ -92,9 +85,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
 
     private fun initApiInbound(ch: NioSocketChannel, inbound: Inbound) {
         ch.pipeline().addLast(
-            ChunkedWriteHandler(),
-            HttpServerCodec(),
-            HttpObjectAggregator(Int.MAX_VALUE)
+            ChunkedWriteHandler(), HttpServerCodec(), HttpObjectAggregator(Int.MAX_VALUE)
         )
         ch.pipeline().addLast(ApiHandle(inbound))
     }
@@ -144,8 +135,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
     }
 
     private fun trojanInboundAddPromise(
-        ch: NioSocketChannel,
-        inbound: Inbound
+        ch: NioSocketChannel, inbound: Inbound
     ): Promise<Channel> {
         val handleShakePromise = ch.eventLoop().next().newPromise<Channel>()
         handleShakePromise.addListener(FutureListener { future ->
