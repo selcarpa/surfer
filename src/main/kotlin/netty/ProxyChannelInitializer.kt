@@ -57,28 +57,26 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
         ch.pipeline().addFirst(IDLE_CLOSE_HANDLER, IdleCloseHandler())
         ch.pipeline().addFirst(IDLE_CHECK_HANDLER, IdleStateHandler(300, 300, 300))
         ch.pipeline().addFirst(GLOBAL_TRAFFIC_SHAPING, globalTrafficShapingHandler)
-        if (inbound != null) {
-            when (Protocol.valueOfOrNull(inbound.protocol)) {
-                Protocol.HTTP -> {
-                    initHttpInbound(ch, inbound)
-                }
+        when (Protocol.valueOfOrNull(inbound.protocol)) {
+            Protocol.HTTP -> {
+                initHttpInbound(ch, inbound)
+            }
 
-                Protocol.SOCKS5 -> {
-                    initSocksInbound(ch, inbound)
-                }
+            Protocol.SOCKS5 -> {
+                initSocksInbound(ch, inbound)
+            }
 
-                Protocol.TROJAN -> {
-                    initTrojanInbound(ch, inbound)
-                }
+            Protocol.TROJAN -> {
+                initTrojanInbound(ch, inbound)
+            }
 
-                Protocol.API -> {
-                    initApiInbound(ch, inbound)
-                }
+            Protocol.API -> {
+                initApiInbound(ch, inbound)
+            }
 
-                else -> {
-                    logger.error("[${ch.id().asShortText()}] not support inbound: ${inbound.protocol}")
-                    ch.closeOnFlush()
-                }
+            else -> {
+                logger.error("[${ch.id().asShortText()}] not support inbound: ${inbound.protocol}")
+                ch.closeOnFlush()
             }
         }
     }

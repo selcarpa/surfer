@@ -33,11 +33,11 @@ object NettyServer {
     val workerGroup: EventLoopGroup = NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
 
     //tcp
-    val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup).channel(NioServerSocketChannel::class.java)
+    private val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup).channel(NioServerSocketChannel::class.java)
         .handler(LoggingHandler(LogLevel.TRACE)).childHandler(ProxyChannelInitializer())
 
     //ukcp
-    val ukcpServerBootstrap = UkcpServerBootstrap().group(workerGroup).channel(UkcpServerChannel::class.java)
+    private val ukcpServerBootstrap = UkcpServerBootstrap().group(workerGroup).channel(UkcpServerChannel::class.java)
         .childHandler(ProxyChannelInitializer()).also {
             ChannelOptionHelper.nodelay(it, true, 20, 2, true).childOption(UkcpChannelOption.UKCP_MTU, 512)
         }
