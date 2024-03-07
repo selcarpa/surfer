@@ -30,21 +30,16 @@ object NettyServer {
 
     private val bossGroup: EventLoopGroup =
         NioEventLoopGroup(1, ThreadPerTaskExecutor(DefaultThreadFactory("BossGroup")))
-    val workerGroup: EventLoopGroup =
-        NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
+    val workerGroup: EventLoopGroup = NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
 
     //tcp
-    val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup)
-        .channel(NioServerSocketChannel::class.java)
-        .handler(LoggingHandler(LogLevel.TRACE))
-        .childHandler(ProxyChannelInitializer())
+    val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup).channel(NioServerSocketChannel::class.java)
+        .handler(LoggingHandler(LogLevel.TRACE)).childHandler(ProxyChannelInitializer())
 
     //ukcp
-    val ukcpServerBootstrap = UkcpServerBootstrap().group(workerGroup)
-        .channel(UkcpServerChannel::class.java)
+    val ukcpServerBootstrap = UkcpServerBootstrap().group(workerGroup).channel(UkcpServerChannel::class.java)
         .childHandler(ProxyChannelInitializer()).also {
-            ChannelOptionHelper.nodelay(it, true, 20, 2, true)
-                .childOption(UkcpChannelOption.UKCP_MTU, 512)
+            ChannelOptionHelper.nodelay(it, true, 20, 2, true).childOption(UkcpChannelOption.UKCP_MTU, 512)
         }
 
 
@@ -54,7 +49,13 @@ object NettyServer {
      */
     fun start(countDownLatch: CountDownLatch? = null) {
         var tcpBind = false
-        Configuration.inbounds.groupBy { inbound -> Protocol.valueOfOrNull(inbound.protocol).topProtocol() }.forEach {
+        Configuration.inbounds.groupBy { inbound ->
+            if (inbound.inboundStreamBy != null) {
+                Protocol.valueOfOrNull(inbound.inboundStreamBy.type).topProtocol()
+            } else {
+                Protocol.valueOfOrNull(inbound.protocol).topProtocol()
+            }
+        }.forEach {
             when (it.key) {
                 Protocol.TCP -> {
                     it.value.forEach { inbound ->
