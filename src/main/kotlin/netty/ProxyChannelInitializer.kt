@@ -36,6 +36,7 @@ import stream.SslActiveHandler
 import stream.WebsocketDuplexHandler
 import utils.closeOnFlush
 import java.io.File
+import java.net.InetSocketAddress
 
 private val logger = KotlinLogging.logger {}
 
@@ -50,7 +51,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
         val localAddress = ch.localAddress()
 
         val inbound = portInboundBinds.first {
-            localAddress.port == it.first
+            localAddress.port == (it.first.localAddress() as InetSocketAddress).port
         }.third
         ch.pipeline().addFirst(LOG_HANDLER, LoggingHandler(LogLevel.TRACE))
         //todo: set idle timeout, and close channel

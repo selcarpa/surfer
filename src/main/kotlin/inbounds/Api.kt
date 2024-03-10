@@ -21,23 +21,32 @@ class ApiHandle(private val inbound: Inbound) : SimpleChannelInboundHandler<Full
     override fun channelRead0(ctx: ChannelHandlerContext, request: FullHttpRequest) {
 
         if (inbound.apiSettings.isEmpty()) {
-            val doCall = endpoints[request.uri()]
-            if (doCall != null) {
-                doCall(request, ctx.channel())
-            } else {
-                ctx.channel()
-                    .writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.NOT_FOUND))
-                ctx.close()
-            }
+            doApi(request, ctx)
             return
         }
 
         inbound.apiSettings.filter {
             request.headers()["auth"] != it.password
         }.first {
+            doApi(request, ctx)
             return@channelRead0
         }
         ctx.channel().writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.UNAUTHORIZED))
+    }
+
+    private fun doApi(
+        request: FullHttpRequest,
+        ctx: ChannelHandlerContext
+    ) {
+        val doCall = endpoints[request.uri()]
+        if (doCall != null) {
+            logger.warn { "id: ${inbound.id}, api call ${request.uri()}" }
+            doCall(request, ctx.channel())
+        } else {
+            ctx.channel()
+                .writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.NOT_FOUND))
+            ctx.close()
+        }
     }
 
 }
@@ -93,12 +102,10 @@ fun removeInboundById(request: FullHttpRequest, channel: Channel) {
         it.second == id
     }
     when (Protocol.valueOfOrNull(portInboundBind.third.protocol).topProtocol()) {
-        Protocol.TCP -> {
-            channel.writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.OK))
-            channel.close()
-        }
-
-        Protocol.UKCP -> {
+        Protocol.TCP, Protocol.UKCP -> {
+            portInboundBind.first.close()
+            portInboundBinds.remove(portInboundBind)
+            logger.info { "remove inbound by id $id, unbind port ${portInboundBind.third.port}"}
             channel.writeAndFlush(DefaultHttpResponse(request.protocolVersion(), HttpResponseStatus.OK))
             channel.close()
         }

@@ -6,6 +6,7 @@ import io.jpower.kcp.netty.UkcpChannelOption
 import io.jpower.kcp.netty.UkcpServerChannel
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.bootstrap.UkcpServerBootstrap
+import io.netty.channel.Channel
 import io.netty.channel.EventLoopGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
@@ -26,7 +27,7 @@ import kotlin.system.exitProcess
 object NettyServer {
     private val logger = KotlinLogging.logger {}
 
-    val portInboundBinds = mutableListOf<Triple<Int, String, Inbound>>()
+    val portInboundBinds = mutableListOf<Triple<Channel, String, Inbound>>()
 
     private val bossGroup: EventLoopGroup =
         NioEventLoopGroup(1, ThreadPerTaskExecutor(DefaultThreadFactory("BossGroup")))
@@ -61,7 +62,7 @@ object NettyServer {
                     it.value.forEach { inbound ->
                         tcpBind(inbound, {
                             countDownLatch?.countDown();
-                            portInboundBinds.add(Triple(inbound.port, inbound.id, inbound))
+                            portInboundBinds.add(Triple(it, inbound.id, inbound))
                         }, { exitProcess(1) })
                         tcpBind = true
                     }
@@ -72,7 +73,7 @@ object NettyServer {
                     it.value.forEach { inbound ->
                         ukcpBind(inbound, {
                             countDownLatch?.countDown()
-                            portInboundBinds.add(Triple(inbound.port, inbound.id, inbound))
+                            portInboundBinds.add(Triple(it, inbound.id, inbound))
                         }, { exitProcess(1) })
                     }
                 }
@@ -93,11 +94,12 @@ object NettyServer {
     /**
      * bind ukcp port
      */
-    fun ukcpBind(inbound: Inbound, success: (() -> Unit)? = null, fail: (() -> Unit)? = null) {
-        ukcpServerBootstrap.bind(inbound.listen, inbound.port).addListener { future ->
+    fun ukcpBind(inbound: Inbound, success: ((Channel) -> Unit)? = null, fail: (() -> Unit)? = null) {
+        val bind = ukcpServerBootstrap.bind(inbound.listen, inbound.port)
+        bind.addListener { future ->
             if (future.isSuccess) {
                 logger.info("${inbound.protocol} bind ${inbound.port} success")
-                success?.let { it() }
+                success?.let { it(bind.channel()) }
             } else {
                 logger.error("bind ${inbound.port} fail, reason:${future.cause().message}")
                 fail?.let { it() }
@@ -108,13 +110,14 @@ object NettyServer {
     /**
      * bind tcp port
      */
-    fun tcpBind(inbound: Inbound, success: (() -> Unit)? = null, fail: (() -> Unit)? = null) {
-        tcpBootstrap.bind(inbound.listen, inbound.port).addListener { future ->
+    fun tcpBind(inbound: Inbound, success: ((Channel) -> Unit)? = null, fail: (() -> Unit)? = null) {
+        val bind = tcpBootstrap.bind(inbound.listen, inbound.port)
+        bind.addListener { future ->
             if (future.isSuccess) {
-                logger.info("id:${inbound.id}, ${inbound.protocol} bind ${inbound.port} success")
-                success?.let { it() }
+                logger.info("${inbound.protocol} bind ${inbound.port} success, id: ${inbound.id}")
+                success?.let { it(bind.channel()) }
             } else {
-                logger.error("id:${inbound.id}, bind ${inbound.port} fail, reason:${future.cause().message}")
+                logger.error("${inbound.protocol} bind ${inbound.port} fail, reason:${future.cause().message}, id: ${inbound.id}")
                 fail?.let { it() }
             }
         }

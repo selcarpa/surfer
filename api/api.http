@@ -1,0 +1,8 @@
+### add inbound
+POST http://{{service}}/add/inbound
+auth:
+Content-Type: application/json
+
+{
+
+}
