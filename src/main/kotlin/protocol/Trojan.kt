@@ -27,6 +27,7 @@ import model.protocol.Protocol
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
+import netty.AutoSuccessHandler
 import stream.WebsocketDuplexHandler
 import utils.toAddressType
 import utils.toSha224
@@ -177,14 +178,13 @@ class TrojanProxy(
                 )
             )
         )
-        //fixme: trojan proxy via websocket should not setConnectSuccess here
-        ctx.pipeline().addLast("AutoSuccessHandler", AutoSuccessHandler {
-            setThisConnectSuccess()
-        })
 
         val newPromise = ctx.channel().eventLoop().newPromise<Channel>()
         newPromise.addListener {
             if (it.isSuccess && !ctx.pipeline().names().contains(TROJAN_PROXY_OUTBOUND)) {
+                ctx.pipeline().addFirst("AutoSuccessHandler", AutoSuccessHandler {
+                    setThisConnectSuccess()
+                })
                 ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
             }
         }
@@ -241,12 +241,3 @@ class TrojanProxy(
 
 }
 
-class AutoSuccessHandler(private val exec: () -> Unit) : ChannelInboundHandlerAdapter() {
-    override fun channelActive(ctx: ChannelHandlerContext) {
-        exec()
-        if (ctx.pipeline().context("AutoSuccessHandler") != null) {
-            ctx.pipeline().remove(this)
-        }
-        super.channelActive(ctx)
-    }
-}

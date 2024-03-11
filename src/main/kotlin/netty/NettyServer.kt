@@ -6,7 +6,10 @@ import io.jpower.kcp.netty.UkcpChannelOption
 import io.jpower.kcp.netty.UkcpServerChannel
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.bootstrap.UkcpServerBootstrap
+import io.netty.buffer.ByteBufAllocator
+import io.netty.buffer.UnpooledByteBufAllocator
 import io.netty.channel.Channel
+import io.netty.channel.ChannelOption
 import io.netty.channel.EventLoopGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioServerSocketChannel
@@ -34,14 +37,16 @@ object NettyServer {
     val workerGroup: EventLoopGroup = NioEventLoopGroup(0, ThreadPerTaskExecutor(DefaultThreadFactory("SurferELG")))
 
     //tcp
-    private val tcpBootstrap = ServerBootstrap().group(bossGroup, workerGroup).channel(NioServerSocketChannel::class.java)
+    private val tcpBootstrap = ServerBootstrap().option(ChannelOption.ALLOCATOR, UnpooledByteBufAllocator.DEFAULT)
+        .group(bossGroup, workerGroup).channel(NioServerSocketChannel::class.java)
         .handler(LoggingHandler(LogLevel.TRACE)).childHandler(ProxyChannelInitializer())
 
     //ukcp
-    private val ukcpServerBootstrap = UkcpServerBootstrap().group(workerGroup).channel(UkcpServerChannel::class.java)
-        .childHandler(ProxyChannelInitializer()).also {
-            ChannelOptionHelper.nodelay(it, true, 20, 2, true).childOption(UkcpChannelOption.UKCP_MTU, 512)
-        }
+    private val ukcpServerBootstrap =
+        UkcpServerBootstrap().group(workerGroup).option(ChannelOption.ALLOCATOR, UnpooledByteBufAllocator.DEFAULT)
+            .channel(UkcpServerChannel::class.java).childHandler(ProxyChannelInitializer()).also {
+                ChannelOptionHelper.nodelay(it, true, 20, 2, true).childOption(UkcpChannelOption.UKCP_MTU, 512)
+            }
 
 
     /**
