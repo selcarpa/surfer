@@ -27,7 +27,9 @@ import model.protocol.Protocol
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
-import netty.AutoSuccessHandler
+import netty.AutoExecHandler
+import netty.EventTriggerHandler
+import netty.ExceptionCaughtHandler
 import stream.WebsocketDuplexHandler
 import utils.toAddressType
 import utils.toSha224
@@ -115,6 +117,7 @@ class TrojanProxy(
         return "none"
     }
 
+
     override fun addCodec(ctx: ChannelHandlerContext) {
         val p = ctx.pipeline()
         val name = ctx.name()
@@ -124,7 +127,7 @@ class TrojanProxy(
             Protocol.TCP -> {
                 addPreHandledTcp(ctx)
                 p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-                p.addLast("AutoSuccessHandler", AutoSuccessHandler { setThisConnectSuccess() })
+                p.addLast("AutoSuccessHandler", AutoExecHandler { setThisConnectSuccess() })
             }
 
             Protocol.TLS -> {
@@ -182,13 +185,14 @@ class TrojanProxy(
         val newPromise = ctx.channel().eventLoop().newPromise<Channel>()
         newPromise.addListener {
             if (it.isSuccess && !ctx.pipeline().names().contains(TROJAN_PROXY_OUTBOUND)) {
-                ctx.pipeline().addFirst("AutoSuccessHandler", AutoSuccessHandler {
+                ctx.pipeline().addFirst("AutoSuccessHandler", AutoExecHandler {
                     setThisConnectSuccess()
                 })
                 ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
             }
         }
         ctx.pipeline().addBefore(ctx.name(), "websocket_duplex_handler", WebsocketDuplexHandler(newPromise))
+        ctx.pipeline().addLast(ExceptionCaughtHandler())
     }
 
     /**
@@ -211,6 +215,15 @@ class TrojanProxy(
                 super.userEventTriggered(ctx, evt)
             }
         })
+//        ctx.pipeline().addLast(EventTriggerHandler { _, it ->
+//            if (it is SslCompletionEvent) {
+//                ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
+//                setThisConnectSuccess()
+//                ctx.pipeline().remove(this)
+//                return@EventTriggerHandler true
+//            }
+//            return@EventTriggerHandler false
+//        })
     }
 
 
