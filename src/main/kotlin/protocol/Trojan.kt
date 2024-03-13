@@ -8,7 +8,6 @@ import io.netty.handler.codec.http.DefaultHttpHeaders
 import io.netty.handler.codec.http.HttpClientCodec
 import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory
-import io.netty.handler.codec.http.websocketx.WebSocketClientProtocolHandler
 import io.netty.handler.codec.http.websocketx.WebSocketVersion
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
@@ -28,9 +27,9 @@ import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import mu.KotlinLogging
 import netty.AutoExecHandler
-import netty.EventTriggerHandler
 import netty.ExceptionCaughtHandler
-import stream.WebsocketDuplexHandler
+import stream.WebSocketDuplexHandler
+import stream.WebSocketHandshakeHandler
 import utils.toAddressType
 import utils.toSha224
 import utils.toUUid
@@ -173,14 +172,14 @@ class TrojanProxy(
         ctx.pipeline().addBefore(ctx.name(), "HttpObjectAggregator", HttpObjectAggregator(8192))
         ctx.pipeline()
             .addBefore(ctx.name(), "WebSocketClientCompressionHandler", WebSocketClientCompressionHandler.INSTANCE)
-
-        ctx.pipeline().addBefore(
-            ctx.name(), "websocket_client_handshaker", WebSocketClientProtocolHandler(
-                WebSocketClientHandshakerFactory.newHandshaker(
-                    uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-                )
-            )
-        )
+//
+//        ctx.pipeline().addBefore(
+//            ctx.name(), "websocket_client_handshaker", WebSocketClientProtocolHandler(
+//                WebSocketClientHandshakerFactory.newHandshaker(
+//                    uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
+//                )
+//            )
+//        )
 
         val newPromise = ctx.channel().eventLoop().newPromise<Channel>()
         newPromise.addListener {
@@ -191,7 +190,7 @@ class TrojanProxy(
                 ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
             }
         }
-        ctx.pipeline().addBefore(ctx.name(), "websocket_duplex_handler", WebsocketDuplexHandler(newPromise))
+        ctx.pipeline().addBefore(ctx.name(), "websocket_duplex_handler", WebSocketDuplexHandler(newPromise))
         ctx.pipeline().addLast(ExceptionCaughtHandler())
     }
 
@@ -244,13 +243,39 @@ class TrojanProxy(
     }
 
     override fun newInitialMessage(ctx: ChannelHandlerContext): Any? {
-        return null
+        return when (streamBy) {
+            Protocol.WS, Protocol.WSS -> {
+                val newHandshaker = WebSocketClientHandshakerFactory.newHandshaker(
+                    URI(
+                        "${
+                            if (streamBy == Protocol.WS) {
+                                "ws"
+                            } else {
+                                "wss"
+                            }
+                        }://${outboundStreamBy.wsOutboundSetting!!.host}:${outboundStreamBy.wsOutboundSetting.port}/${
+                            outboundStreamBy.wsOutboundSetting.path.removePrefix(
+                                "/"
+                            )
+                        }"
+                    ), WebSocketVersion.V13, null, true, DefaultHttpHeaders()
+                )
+                ctx.pipeline().addBefore(
+                    "websocket_duplex_handler",
+                    "WebSocketHandshakeHandler",
+                    WebSocketHandshakeHandler(newHandshaker)
+                )
+                newHandshaker.javaClass.declaredMethods.find { it.name == "newHandshakeRequest" }!!.also {
+                    it.isAccessible = true
+                }.invoke(newHandshaker)
+            }
+
+            else -> null
+        }
     }
 
     override fun handleResponse(ctx: ChannelHandlerContext, response: Any): Boolean {
         return true
     }
-
-
 }
 

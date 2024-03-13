@@ -33,7 +33,7 @@ import mu.KotlinLogging
 import inbounds.TrojanInboundHandler
 import netty.NettyServer.portInboundBinds
 import stream.SslActiveHandler
-import stream.WebsocketDuplexHandler
+import stream.WebSocketDuplexHandler
 import utils.closeOnFlush
 import java.io.File
 import java.net.InetSocketAddress
@@ -169,7 +169,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
             HttpServerCodec(),
             HttpObjectAggregator(Int.MAX_VALUE),
             WebSocketServerProtocolHandler(wsInboundSetting.path),
-            WebsocketDuplexHandler(handleShakePromise)
+            WebSocketDuplexHandler(handleShakePromise)
         )
     }
 }

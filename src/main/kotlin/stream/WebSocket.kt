@@ -6,7 +6,9 @@ import io.netty.channel.Channel
 import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
+import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.handler.codec.http.FullHttpRequest
+import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.websocketx.*
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
@@ -14,8 +16,8 @@ import io.netty.util.concurrent.Promise
 import mu.KotlinLogging
 
 private val logger = KotlinLogging.logger {}
-class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>? = null) :
-    ChannelDuplexHandler() {
+
+class WebSocketDuplexHandler(private val handleShakePromise: Promise<Channel>? = null) : ChannelDuplexHandler() {
 
 
     private var continuationBuffer: ByteBuf? = null
@@ -134,21 +136,37 @@ class WebsocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
     }
 }
 
-fun websocketEvent(ctx: ChannelHandlerContext, evt: Any, handleShakePromise: Promise<Channel>? = null) {
-    //when surfer as a websocket server, we need to handle handshake complete event to determine whether the handshake is successful, and start the relay operation
-    if (evt is WebSocketServerProtocolHandler.HandshakeComplete) {
-        logger.trace { "[${ctx.channel().id()}] WebsocketInbound handshake complete" }
-        handleShakePromise?.setSuccess(ctx.channel())
-    }
-    //when surfer as a websocket client, we also need to handle handshake complete event to determine whether the handshake is successful, and start the relay operation
-    if (evt is WebSocketClientProtocolHandler.ClientHandshakeStateEvent) {
-        if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE) {
-            logger.trace { "[${ctx.channel().id()}] WebsocketInbound handshake complete" }
-            handleShakePromise?.setSuccess(ctx.channel())
-        } else if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_TIMEOUT) {
-            logger.error { "[${ctx.channel().id()}] WebsocketInbound handshake timeout" }
-            handleShakePromise?.setFailure(Throwable("websocket handshake failed"))
+//fun websocketEvent(ctx: ChannelHandlerContext, evt: Any, handleShakePromise: Promise<Channel>? = null) {
+//    //when surfer as a websocket server, we need to handle handshake complete event to determine whether the handshake is successful, and start the relay operation
+//    if (evt is WebSocketServerProtocolHandler.HandshakeComplete) {
+//        logger.trace { "[${ctx.channel().id()}] WebsocketInbound handshake complete" }
+//        handleShakePromise?.setSuccess(ctx.channel())
+//    }
+//    //when surfer as a websocket client, we also need to handle handshake complete event to determine whether the handshake is successful, and start the relay operation
+//    if (evt is WebSocketClientProtocolHandler.ClientHandshakeStateEvent) {
+//        if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE) {
+//            logger.trace { "[${ctx.channel().id()}] WebsocketInbound handshake complete" }
+//            handleShakePromise?.setSuccess(ctx.channel())
+//        } else if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_TIMEOUT) {
+//            logger.error { "[${ctx.channel().id()}] WebsocketInbound handshake timeout" }
+//            handleShakePromise?.setFailure(Throwable("websocket handshake failed"))
+//        }
+//    }
+//    logger.trace { "[${ctx.channel().id()}] userEventTriggered: $evt" }
+//}
+
+
+class WebSocketHandshakeHandler(val handshaker: WebSocketClientHandshaker) :
+    SimpleChannelInboundHandler<FullHttpResponse>() {
+    override fun channelRead0(ctx: ChannelHandlerContext, msg: FullHttpResponse) {
+        if (!handshaker.isHandshakeComplete) {
+            handshaker.finishHandshake(ctx.channel(), msg);
+            ctx.fireUserEventTriggered(
+                WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE
+            );
+            ctx.pipeline().remove(this)
+            return;
         }
     }
-    logger.trace { "[${ctx.channel().id()}] userEventTriggered: $evt" }
+
 }

@@ -10,10 +10,10 @@ private val logger = KotlinLogging.logger {}
  * Auto exec handler
  */
 class AutoExecHandler(private val exec: (ChannelHandlerContext) -> Unit) : ChannelInboundHandlerAdapter() {
-    override fun channelActive(ctx: ChannelHandlerContext) {
+    override fun handlerAdded(ctx: ChannelHandlerContext) {
         exec(ctx)
         ctx.pipeline().remove(this)
-        super.channelActive(ctx)
+        super.handlerAdded(ctx)
     }
 }
 
