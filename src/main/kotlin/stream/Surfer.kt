@@ -19,7 +19,7 @@ import io.netty.util.concurrent.Promise
 import model.*
 import model.config.HttpOutboundSetting
 import model.config.Outbound
-import model.config.Sock5OutboundSetting
+import model.config.Socks5OutboundSetting
 import model.protocol.Odor
 import model.protocol.Protocol
 import mu.KotlinLogging
@@ -80,12 +80,19 @@ private fun outbound(
     if (Protocol.valueOfOrNull(outbound.protocol) == Protocol.GALAXY) {
         return galaxy(connectListener, odor, eventLoopGroup)
     }
+    val desProtocol = Protocol.valueOfOrNull(
+        if (outbound.outboundStreamBy != null) {
+            outbound.outboundStreamBy.type
+        } else {
+            outbound.protocol
+        }
+    )
 
-    setOdorRedirect(outbound, odor)
+    setOdorRedirect(desProtocol, outbound, odor)
 
-    return when (Protocol.valueOfOrNull(outbound.protocol)) {
+    return when (desProtocol) {
         Protocol.SOCKS5 -> socks5Stream(
-            connectListener, outbound.sock5Setting!!, eventLoopGroup, odor
+            connectListener, outbound.socks5Setting!!, eventLoopGroup, odor
         )
 
         Protocol.HTTP -> httpStream(
@@ -103,31 +110,30 @@ private fun outbound(
         }
 
         else -> {
-            logger.error { "stream type ${outbound.outboundStreamBy!!.type} not supported" }
-
+            logger.error { "stream type ${desProtocol.name} not supported" }
         }
     }
 }
 
-fun setOdorRedirect(outbound: Outbound, odor: Odor) {
+fun setOdorRedirect(protocol: Protocol, outbound: Outbound, odor: Odor) {
     if (outbound.serverDns) {
         odor.notDns = true
     }
-    when (Protocol.valueOfOrNull(outbound.outboundStreamBy!!.type)) {
+    when (protocol) {
 
         Protocol.WSS, Protocol.WS -> {
-            odor.redirectPort = outbound.outboundStreamBy.wsOutboundSetting!!.port
-            odor.redirectHost = outbound.outboundStreamBy.wsOutboundSetting.host
+            odor.redirectPort = outbound.outboundStreamBy!!.wsOutboundSetting!!.port
+            odor.redirectHost = outbound.outboundStreamBy.wsOutboundSetting!!.host
         }
 
         Protocol.TCP, Protocol.TLS -> {
-            odor.redirectPort = outbound.outboundStreamBy.tcpOutboundSetting!!.port
-            odor.redirectHost = outbound.outboundStreamBy.tcpOutboundSetting.host
+            odor.redirectPort = outbound.outboundStreamBy!!.tcpOutboundSetting!!.port
+            odor.redirectHost = outbound.outboundStreamBy.tcpOutboundSetting!!.host
         }
 
         Protocol.SOCKS5 -> {
-            odor.redirectPort = outbound.sock5Setting!!.port
-            odor.redirectHost = outbound.sock5Setting.host
+            odor.redirectPort = outbound.socks5Setting!!.port
+            odor.redirectHost = outbound.socks5Setting.host
         }
 
         Protocol.HTTP -> {
@@ -200,7 +206,7 @@ private fun httpStream(
 
 private fun socks5Stream(
     connectListener: FutureListener<Channel>,
-    socks5OutboundSetting: Sock5OutboundSetting,
+    socks5OutboundSetting: Socks5OutboundSetting,
     eventLoopGroup: EventLoopGroup,
     odor: Odor
 ) {

@@ -154,12 +154,16 @@ class TrojanProxy(
     private fun addPreHandledWs(ctx: ChannelHandlerContext) {
         val uri = URI(
             "${
-                if (streamBy == Protocol.WS) {
-                    "ws"
-                } else if (streamBy == Protocol.WSS) {
-                    "wss"
-                } else {
-                    throw IllegalArgumentException("unsupported stream")
+                when (streamBy) {
+                    Protocol.WS -> {
+                        "ws"
+                    }
+                    Protocol.WSS -> {
+                        "wss"
+                    }
+                    else -> {
+                        throw IllegalArgumentException("unsupported stream")
+                    }
                 }
             }://${outboundStreamBy.wsOutboundSetting!!.host}:${outboundStreamBy.wsOutboundSetting!!.port}/${
                 outboundStreamBy.wsOutboundSetting.path.removePrefix(

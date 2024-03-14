@@ -88,7 +88,7 @@ data class Auth(val password: String, val username: String)
 data class Outbound(
     val protocol: String,
     val trojanSetting: TrojanSetting?,
-    val sock5Setting: Sock5OutboundSetting?,
+    val socks5Setting: Socks5OutboundSetting?,
     val httpSetting: HttpOutboundSetting?,
     val outboundStreamBy: OutboundStreamBy?,
     val tag: String?,
@@ -103,7 +103,7 @@ data class OutboundStreamBy(
 )
 
 @Serializable
-data class Sock5OutboundSetting(val auth: Auth?, val port: Int, val host: String)
+data class Socks5OutboundSetting(val auth: Auth?, val port: Int, val host: String)
 
 @Serializable
 data class HttpOutboundSetting(val auth: Auth?, val port: Int, val host: String)

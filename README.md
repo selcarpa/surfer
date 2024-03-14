@@ -123,9 +123,51 @@ java -jar surfer.jar -c=config.json
 
 ```json5
 {
-  protocol: "galaxy"
+  protocol: "galaxy",
+  //optional
+  tag: ""
 }
 ```
+
+##### direct outbound by http proxy
+
+```json5
+{
+  protocol: "http",
+  httpSetting: {
+    host: "",
+    port: 20809,
+    //optional
+    auth: {
+      //optional, if not set, no authentication
+      username: "username",
+      password: "password"
+    },
+  },
+  //optional
+  tag: ""
+}
+```
+##### direct outbound by socks5 proxy
+
+```json5
+{
+  protocol: "socks5",
+  socks5Setting: {
+    host: "",
+    port: 20808,
+    //optional
+    auth: {
+      //optional, if not set, no authentication
+      username: "username",
+      password: "password"
+    },
+  },
+  //optional
+  tag: ""
+}
+```
+
 
 #### Rule
 
