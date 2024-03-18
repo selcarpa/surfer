@@ -80,13 +80,7 @@ private fun outbound(
     if (Protocol.valueOfOrNull(outbound.protocol) == Protocol.GALAXY) {
         return galaxy(connectListener, odor, eventLoopGroup)
     }
-    val desProtocol = Protocol.valueOfOrNull(
-        if (outbound.outboundStreamBy != null) {
-            outbound.outboundStreamBy.type
-        } else {
-            outbound.protocol
-        }
-    )
+    val desProtocol = Protocol.valueOfOrNull(outbound.protocol)
 
     setOdorRedirect(desProtocol, outbound, odor)
 
@@ -121,14 +115,22 @@ fun setOdorRedirect(protocol: Protocol, outbound: Outbound, odor: Odor) {
     }
     when (protocol) {
 
-        Protocol.WSS, Protocol.WS -> {
-            odor.redirectPort = outbound.outboundStreamBy!!.wsOutboundSetting!!.port
-            odor.redirectHost = outbound.outboundStreamBy.wsOutboundSetting!!.host
-        }
+        Protocol.TROJAN -> {
+            when (Protocol.valueOfOrNull(outbound.outboundStreamBy!!.type)) {
+                Protocol.WSS, Protocol.WS -> {
+                    odor.redirectPort = outbound.outboundStreamBy!!.wsOutboundSetting!!.port
+                    odor.redirectHost = outbound.outboundStreamBy.wsOutboundSetting!!.host
+                }
 
-        Protocol.TCP, Protocol.TLS -> {
-            odor.redirectPort = outbound.outboundStreamBy!!.tcpOutboundSetting!!.port
-            odor.redirectHost = outbound.outboundStreamBy.tcpOutboundSetting!!.host
+                Protocol.TCP, Protocol.TLS -> {
+                    odor.redirectPort = outbound.outboundStreamBy!!.tcpOutboundSetting!!.port
+                    odor.redirectHost = outbound.outboundStreamBy.tcpOutboundSetting!!.host
+                }
+
+                else -> {
+                    //ignored
+                }
+            }
         }
 
         Protocol.SOCKS5 -> {
@@ -304,8 +306,8 @@ class ProxyChannelActiveHandler(private val promise: Promise<Channel>) : Channel
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
         if (evt is ProxyConnectionEvent) {
             logger.trace { "[${ctx.channel().id().asShortText()}] triggered ProxyConnectionEvent: $evt" }
-            promise.setSuccess(ctx.channel())
             ctx.pipeline().remove(this)
+            promise.setSuccess(ctx.channel())
         }
         super.userEventTriggered(ctx, evt)
     }
