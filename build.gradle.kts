@@ -20,7 +20,7 @@ dependencies {
     implementation("io.jpower.kcp:kcp-netty:1.5.2")
 
     //ssl server support
-    implementation("org.bouncycastle:bcpkix-jdk18on:1.77")
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.78")
 //    implementation("net.peanuuutz:tomlkt:0.2.0")
     //kotlin-logging
     implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
