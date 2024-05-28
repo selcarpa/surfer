@@ -13,6 +13,7 @@ enum class LogLevel {
     TRACE, DEBUG, INFO, WARN, ERROR, OFF;
 
     companion object {
+        @JvmStatic
         fun by(levelString: String) = when (levelString.lowercase()) {
             "trace" -> TRACE
             "debug" -> DEBUG

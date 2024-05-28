@@ -1,9 +1,10 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import log.loadLogConfig
+import log.LogConfigLoader
 import log.startMemoryStatisticPrintPerSeconds
 import log.startSpeedStatisticPrintPerSeconds
+import model.config.Config.Configuration
 import model.config.Config.ConfigurationUrl
 import netty.NettyServer
 
@@ -16,7 +17,8 @@ object MainKt {
             argCommandExec(it)
         }
 
-        loadLogConfig()
+//        loadLogConfig()
+        LogConfigLoader.loadLogConfig(Configuration.log)
 
         NettyServer.start()
         logger.info { "【注意事项】 本品不能代替药物。" }
