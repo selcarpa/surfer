@@ -3,7 +3,7 @@ package utils
 import io.netty.buffer.ByteBufUtil
 import io.netty.handler.codec.socks.SocksAddressType
 import io.netty.util.NetUtil
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.security.MessageDigest
 import java.util.*
 

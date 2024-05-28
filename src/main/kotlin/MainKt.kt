@@ -1,10 +1,10 @@
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import log.loadLogConfig
 import log.startMemoryStatisticPrintPerSeconds
 import log.startSpeedStatisticPrintPerSeconds
 import model.config.Config.ConfigurationUrl
-import mu.KotlinLogging
 import netty.NettyServer
 
 private val logger = KotlinLogging.logger {}
@@ -19,7 +19,7 @@ object MainKt {
         loadLogConfig()
 
         NettyServer.start()
-        logger.info("【注意事项】 本品不能代替药物。")
+        logger.info { "【注意事项】 本品不能代替药物。" }
     }
 }
 

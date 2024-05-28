@@ -25,7 +25,7 @@ import model.protocol.Odor
 import model.protocol.Protocol
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import netty.AutoExecHandler
 import netty.ExceptionCaughtHandler
 import stream.WebSocketDuplexHandler

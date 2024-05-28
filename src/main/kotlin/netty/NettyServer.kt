@@ -20,7 +20,7 @@ import io.netty.util.concurrent.ThreadPerTaskExecutor
 import model.config.Config.Configuration
 import model.config.Inbound
 import model.protocol.Protocol
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.concurrent.CountDownLatch
 import kotlin.system.exitProcess
 

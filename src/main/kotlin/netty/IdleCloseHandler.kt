@@ -3,7 +3,7 @@ package netty
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.handler.timeout.IdleStateEvent
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import utils.closeOnFlush
 
 private val logger = KotlinLogging.logger {}

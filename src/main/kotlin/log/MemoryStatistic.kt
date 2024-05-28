@@ -3,7 +3,7 @@ package log
 import io.netty.buffer.ByteBufAllocator
 import io.netty.buffer.ByteBufAllocatorMetricProvider
 import kotlinx.coroutines.delay
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 
 
 private val logger = KotlinLogging.logger {}

@@ -1,7 +1,7 @@
 val taskGroupName = "surfer"
 
 plugins {
-    kotlin("jvm") version "1.9.23"
+    kotlin("jvm") version "2.0.0"
     kotlin("plugin.serialization") version "2.0.0"
     application
     id("com.github.johnrengelman.shadow") version "8.1.1"
@@ -21,9 +21,8 @@ dependencies {
 
     //ssl server support
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
-//    implementation("net.peanuuutz:tomlkt:0.2.0")
     //kotlin-logging
-    implementation("io.github.microutils:kotlin-logging-jvm:3.0.5")
+    implementation("io.github.oshai:kotlin-logging-jvm:6.0.3")
     implementation("ch.qos.logback:logback-classic:1.5.6")
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

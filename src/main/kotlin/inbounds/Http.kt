@@ -10,7 +10,7 @@ import io.netty.util.ReferenceCountUtil
 import model.config.Inbound
 import model.protocol.Odor
 import model.protocol.Protocol
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.relayAndOutbound

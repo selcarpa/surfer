@@ -22,7 +22,7 @@ import model.config.Outbound
 import model.config.Socks5OutboundSetting
 import model.protocol.Odor
 import model.protocol.Protocol
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import netty.IdleCloseHandler
 import netty.ProxyChannelInitializer
 import protocol.DiscardHandler

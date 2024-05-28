@@ -15,7 +15,7 @@ import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.proxy.Socks5ProxyHandler
 import io.netty.util.CharsetUtil
 import model.config.Config
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import netty.NettyServer
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll

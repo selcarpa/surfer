@@ -11,7 +11,7 @@ import model.config.Config.Configuration
 import model.config.Inbound
 import model.config.json
 import model.protocol.Protocol
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import netty.NettyServer
 import netty.NettyServer.portInboundBinds
 

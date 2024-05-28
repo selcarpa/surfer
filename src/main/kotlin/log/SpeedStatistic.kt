@@ -1,7 +1,7 @@
 package log
 
 import kotlinx.coroutines.delay
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import netty.ProxyChannelInitializer.Companion.globalTrafficShapingHandler
 
 private val logger = KotlinLogging.logger {}

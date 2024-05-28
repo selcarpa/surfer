@@ -11,7 +11,7 @@ import model.config.Inbound
 import model.protocol.Odor
 import model.protocol.Protocol
 import model.protocol.TrojanPackage
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import protocol.DiscardHandler
 import rule.resolveOutbound
 import stream.RelayAndOutboundOp

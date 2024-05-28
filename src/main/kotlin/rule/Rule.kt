@@ -7,7 +7,7 @@ import model.config.Rule
 import model.config.RuleType
 import model.protocol.Odor
 import model.protocol.Protocol
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import java.util.*
 
 private val logger = KotlinLogging.logger {}

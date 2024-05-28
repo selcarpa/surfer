@@ -12,7 +12,7 @@ import model.config.Inbound
 import model.config.Socks5Setting
 import model.protocol.Odor
 import model.protocol.Protocol
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.relayAndOutbound

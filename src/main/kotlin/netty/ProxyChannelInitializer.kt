@@ -29,7 +29,7 @@ import model.config.Inbound
 import model.config.TlsInboundSetting
 import model.config.WsInboundSetting
 import model.protocol.Protocol
-import mu.KotlinLogging
+import io.github.oshai.kotlinlogging.KotlinLogging
 import inbounds.TrojanInboundHandler
 import netty.NettyServer.portInboundBinds
 import stream.SslActiveHandler
