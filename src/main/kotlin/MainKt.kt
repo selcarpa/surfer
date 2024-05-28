@@ -1,7 +1,6 @@
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
-import log.loadLogConfig
 import log.startMemoryStatisticPrintPerSeconds
 import log.startSpeedStatisticPrintPerSeconds
 import model.config.Config.ConfigurationUrl
