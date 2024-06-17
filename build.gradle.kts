@@ -22,7 +22,7 @@ dependencies {
     //ssl server support
     implementation("org.bouncycastle:bcpkix-jdk18on:1.78.1")
     //kotlin-logging
-    implementation("io.github.oshai:kotlin-logging-jvm:6.0.3")
+    implementation("io.github.oshai:kotlin-logging-jvm:7.0.0")
     implementation("ch.qos.logback:logback-classic:1.5.6")
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
