@@ -24,7 +24,11 @@ private val logger = KotlinLogging.logger { }
 
 class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<ByteBuf>() {
 
-    private var removed = false
+    override fun handlerAdded(ctx: ChannelHandlerContext) {
+        ctx.channel().config().setAutoRead(false)
+        ctx.read()
+    }
+
     override fun channelRead0(originCTX: ChannelHandlerContext, msg: ByteBuf) {
         //parse trojan package
         val trojanPackage = TrojanPackage.parse(msg)
@@ -34,7 +38,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                 it.password.toUUid().toString().toSha224().toByteArray()
             ) == trojanPackage.hexSha224Password
         }.first { trojanSetting ->
-            logger.info(
+            logger.info {
                 "trojan inbound: [${
                     originCTX.channel().id().asShortText()
                 }], addr: ${trojanPackage.request.host}:${trojanPackage.request.port}, cmd: ${
@@ -42,7 +46,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                         trojanPackage.request.cmd
                     )
                 }"
-            )
+            }
             val odor = Odor(
                 host = trojanPackage.request.host,
                 port = trojanPackage.request.port,
@@ -54,6 +58,11 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                 },
                 fromChannel = originCTX.channel().id().asShortText()
             )
+            logger.debug {
+                "trojan inbound: [${
+                    originCTX.channel().id().asShortText()
+                }], odor: $odor"
+            }
             resolveOutbound(trojanSetting.tag ?: inbound.tag, odor).ifPresent { outbound ->
                 relayAndOutbound(
                     RelayAndOutboundOp(
@@ -62,13 +71,9 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                         relayAndOutboundOp.connectEstablishedCallback = {
                             val payload = Unpooled.buffer()
                             payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
+                            originCTX.pipeline().remove(this@TrojanInboundHandler)
                             it.writeAndFlush(payload).addListener {
-                                //avoid remove this handler twice
-                                if (!removed) {
-                                    //Trojan protocol only need package once, then send origin data directly
-                                    originCTX.pipeline().remove(this@TrojanInboundHandler)
-                                    removed = true
-                                }
+                                originCTX.channel().config().setAutoRead(true)
                             }
                         }
                         relayAndOutboundOp.connectFail = {
@@ -93,7 +98,6 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
             ctx.pipeline().forEach {
                 ctx.pipeline().remove(it.value)
             }
-            removed = true
             ctx.pipeline().addLast(DiscardHandler())
             return
         }

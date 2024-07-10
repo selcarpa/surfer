@@ -21,6 +21,11 @@ private val logger = KotlinLogging.logger {}
 
 class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboundHandler<HttpRequest>(false) {
 
+    override fun handlerAdded(ctx: ChannelHandlerContext) {
+        ctx.channel().config().setAutoRead(false)
+        ctx.read()
+    }
+
     override fun channelInactive(ctx: ChannelHandlerContext) {
         logger.warn { "[${ctx.channel().id().asShortText()}] channel inactive" }
         super.channelInactive(ctx)
@@ -75,6 +80,7 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
                     it.writeAndFlush(encoded).also {
                         //remove all useless listener
                         originCTX.pipeline().cleanHandlers()
+                        originCTX.channel().config().setAutoRead(true)
                     }
                 }
                 relayAndOutboundOp.connectFail = {
@@ -120,8 +126,9 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
                             HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
                         )
                     ).also {
-                        //remove all useless listener
                         originCTX.pipeline().cleanHandlers()
+                        //remove all useless listener
+                        originCTX.channel().config().setAutoRead(true)
                     }
                 }
                 relayAndOutboundOp.connectFail = {

@@ -26,7 +26,8 @@ import model.protocol.Protocol
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import io.github.oshai.kotlinlogging.KotlinLogging
-import netty.AutoExecHandler
+import io.netty.handler.codec.http.websocketx.WebSocketClientProtocolHandler
+import netty.ActiveAutoExecHandler
 import netty.ExceptionCaughtHandler
 import stream.WebSocketDuplexHandler
 import stream.WebSocketHandshakeHandler
@@ -94,7 +95,9 @@ class TrojanProxy(
             }
     }
 
-    private val setThisConnectSuccess = { setConnectSuccess.invoke(this) }
+    private val setThisConnectSuccess = {
+        setConnectSuccess.invoke(this)
+    }
 
 
     constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
@@ -126,7 +129,7 @@ class TrojanProxy(
             Protocol.TCP -> {
                 addPreHandledTcp(ctx)
                 p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-                p.addLast("AutoSuccessHandler", AutoExecHandler { setThisConnectSuccess() })
+                p.addLast("AutoSuccessHandler", ActiveAutoExecHandler { setThisConnectSuccess() })
             }
 
             Protocol.TLS -> {
@@ -187,10 +190,8 @@ class TrojanProxy(
 
         val newPromise = ctx.channel().eventLoop().newPromise<Channel>()
         newPromise.addListener {
-            if (it.isSuccess && !ctx.pipeline().names().contains(TROJAN_PROXY_OUTBOUND)) {
-                ctx.pipeline().addFirst("AutoSuccessHandler", AutoExecHandler {
-                    setThisConnectSuccess()
-                })
+            if (it.isSuccess) {
+                setThisConnectSuccess()
                 ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
             }
         }

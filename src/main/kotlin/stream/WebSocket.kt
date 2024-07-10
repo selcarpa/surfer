@@ -51,7 +51,11 @@ class WebSocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
     }
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        logger.trace("[${ctx.channel().id().asShortText()}] WebsocketInbound receive message:${msg.javaClass.name}")
+        logger.trace {
+            "[${
+                ctx.channel().id().asShortText()
+            }] WebsocketInbound receive message:${msg.javaClass.name}"
+        }
         when (msg) {
             is FullHttpRequest -> {
                 //ignored
@@ -70,15 +74,15 @@ class WebSocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
             }
 
             is TextWebSocketFrame -> {
-                logger.trace("[${ctx.channel().id().asShortText()}] receive text message: ${msg.text()}")
+                logger.trace { "[${ctx.channel().id().asShortText()}] receive text message: ${msg.text()}" }
             }
 
             is BinaryWebSocketFrame -> {
-                logger.trace(
-                    "WebsocketInbound receive message:{}, pipeline handlers:{}",
-                    msg.javaClass.name,
-                    ctx.pipeline().names()
-                )
+                logger.trace {
+                    "${"WebsocketInbound receive message:{}, pipeline handlers:{}"} ${msg.javaClass.name} ${
+                        ctx.pipeline().names()
+                    }"
+                }
                 ctx.fireChannelRead(msg.content())
             }
 
@@ -104,7 +108,7 @@ class WebSocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
             }
 
             else -> {
-                logger.error("WebsocketInbound receive unknown message:${msg.javaClass.name}")
+                logger.error { "WebsocketInbound receive unknown message:${msg.javaClass.name}" }
                 ReferenceCountUtil.release(msg)
             }
         }
@@ -120,10 +124,12 @@ class WebSocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
                         ReferenceCountUtil.release(binaryWebSocketFrame)
                         if (!it.isSuccess) {
                             logger.error(
+                                it.cause()
+                            ) {
                                 "write message:${msg.javaClass.name} to ${
                                     ctx.channel().id().asShortText()
-                                } failed ${ctx.channel().pipeline().names()}", it.cause()
-                            )
+                                } failed ${ctx.channel().pipeline().names()}"
+                            }
                         }
                     }
                 }
@@ -156,16 +162,16 @@ class WebSocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
 //}
 
 
-class WebSocketHandshakeHandler(val handshaker: WebSocketClientHandshaker) :
+class WebSocketHandshakeHandler(private val handshaker: WebSocketClientHandshaker) :
     SimpleChannelInboundHandler<FullHttpResponse>() {
     override fun channelRead0(ctx: ChannelHandlerContext, msg: FullHttpResponse) {
         if (!handshaker.isHandshakeComplete) {
-            handshaker.finishHandshake(ctx.channel(), msg);
+            handshaker.finishHandshake(ctx.channel(), msg)
             ctx.fireUserEventTriggered(
                 WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE
-            );
+            )
             ctx.pipeline().remove(this)
-            return;
+            return
         }
     }
 

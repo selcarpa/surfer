@@ -76,7 +76,7 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
             }
 
             else -> {
-                logger.error("[${ch.id().asShortText()}] not support inbound: ${inbound.protocol}")
+                logger.error { "[${ch.id().asShortText()}] not support inbound: ${inbound.protocol}" }
                 ch.closeOnFlush()
             }
         }
@@ -122,11 +122,11 @@ class ProxyChannelInitializer : ChannelInitializer<NioSocketChannel>() {
             }
 
             else -> {
-                logger.error(
+                logger.error {
                     "[${
                         ch.id().asShortText()
                     }] not support inbound stream by: ${inbound.inboundStreamBy.type}"
-                )
+                }
                 ch.close()
             }
         }

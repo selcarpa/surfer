@@ -103,10 +103,10 @@ object NettyServer {
         val bind = ukcpServerBootstrap.bind(inbound.listen, inbound.port)
         bind.addListener { future ->
             if (future.isSuccess) {
-                logger.info("${inbound.protocol} bind ${inbound.port} success")
+                logger.info { "${inbound.protocol} bind ${inbound.port} success" }
                 success?.let { it(bind.channel()) }
             } else {
-                logger.error("bind ${inbound.port} fail, reason:${future.cause().message}")
+                logger.error { "bind ${inbound.port} fail, reason:${future.cause().message}" }
                 fail?.let { it() }
             }
         }
@@ -119,10 +119,10 @@ object NettyServer {
         val bind = tcpBootstrap.bind(inbound.listen, inbound.port)
         bind.addListener { future ->
             if (future.isSuccess) {
-                logger.info("${inbound.protocol} bind ${inbound.port} success, id: ${inbound.id}")
+                logger.info { "${inbound.protocol} bind ${inbound.port} success, id: ${inbound.id}" }
                 success?.let { it(bind.channel()) }
             } else {
-                logger.error("${inbound.protocol} bind ${inbound.port} fail, reason:${future.cause().message}, id: ${inbound.id}")
+                logger.error { "${inbound.protocol} bind ${inbound.port} fail, reason:${future.cause().message}, id: ${inbound.id}" }
                 fail?.let { it() }
             }
         }
@@ -132,7 +132,7 @@ object NettyServer {
      * close gracefully
      */
     private fun close() {
-        logger.info("我们所经历的每个日常，也或许是一系列的奇迹连续地发生！")
+        logger.info { "我们所经历的每个日常，也或许是一系列的奇迹连续地发生！" }
         if (!(bossGroup.isShutdown || bossGroup.isShuttingDown)) {
             bossGroup.shutdownGracefully()
         }
