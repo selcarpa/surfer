@@ -1,7 +1,6 @@
 package rule
 
 import model.config.Config.Configuration
-import model.config.Inbound
 import model.config.Outbound
 import model.config.Rule
 import model.config.RuleType
@@ -27,7 +26,7 @@ fun resolveOutbound(inboundTag: String?, odor: Odor): Optional<Outbound> {
         }
     }
     logger.info { "[${odor.fromChannel}] no specify outbound matched, use first outbound" }
-    return Configuration.outbounds.stream().filter { true }.findFirst()
+    return Configuration.outbounds.stream().findFirst()
 }
 
 private fun matched(it: Rule, inboundTag: String?, odor: Odor): Boolean {

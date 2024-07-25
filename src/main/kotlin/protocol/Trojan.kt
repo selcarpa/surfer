@@ -29,6 +29,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.netty.handler.codec.http.websocketx.WebSocketClientProtocolHandler
 import netty.ActiveAutoExecHandler
 import netty.ExceptionCaughtHandler
+import org.bouncycastle.est.Source
 import stream.WebSocketDuplexHandler
 import stream.WebSocketHandshakeHandler
 import utils.toAddressType
@@ -179,14 +180,6 @@ class TrojanProxy(
         ctx.pipeline().addBefore(ctx.name(), "HttpObjectAggregator", HttpObjectAggregator(8192))
         ctx.pipeline()
             .addBefore(ctx.name(), "WebSocketClientCompressionHandler", WebSocketClientCompressionHandler.INSTANCE)
-//
-//        ctx.pipeline().addBefore(
-//            ctx.name(), "websocket_client_handshaker", WebSocketClientProtocolHandler(
-//                WebSocketClientHandshakerFactory.newHandshaker(
-//                    uri, WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-//                )
-//            )
-//        )
 
         val newPromise = ctx.channel().eventLoop().newPromise<Channel>()
         newPromise.addListener {
@@ -219,15 +212,7 @@ class TrojanProxy(
                 super.userEventTriggered(ctx, evt)
             }
         })
-//        ctx.pipeline().addLast(EventTriggerHandler { _, it ->
-//            if (it is SslCompletionEvent) {
-//                ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-//                setThisConnectSuccess()
-//                ctx.pipeline().remove(this)
-//                return@EventTriggerHandler true
-//            }
-//            return@EventTriggerHandler false
-//        })
+
     }
 
 

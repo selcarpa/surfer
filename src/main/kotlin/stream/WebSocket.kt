@@ -142,26 +142,6 @@ class WebSocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
     }
 }
 
-//fun websocketEvent(ctx: ChannelHandlerContext, evt: Any, handleShakePromise: Promise<Channel>? = null) {
-//    //when surfer as a websocket server, we need to handle handshake complete event to determine whether the handshake is successful, and start the relay operation
-//    if (evt is WebSocketServerProtocolHandler.HandshakeComplete) {
-//        logger.trace { "[${ctx.channel().id()}] WebsocketInbound handshake complete" }
-//        handleShakePromise?.setSuccess(ctx.channel())
-//    }
-//    //when surfer as a websocket client, we also need to handle handshake complete event to determine whether the handshake is successful, and start the relay operation
-//    if (evt is WebSocketClientProtocolHandler.ClientHandshakeStateEvent) {
-//        if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE) {
-//            logger.trace { "[${ctx.channel().id()}] WebsocketInbound handshake complete" }
-//            handleShakePromise?.setSuccess(ctx.channel())
-//        } else if (evt == WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_TIMEOUT) {
-//            logger.error { "[${ctx.channel().id()}] WebsocketInbound handshake timeout" }
-//            handleShakePromise?.setFailure(Throwable("websocket handshake failed"))
-//        }
-//    }
-//    logger.trace { "[${ctx.channel().id()}] userEventTriggered: $evt" }
-//}
-
-
 class WebSocketHandshakeHandler(private val handshaker: WebSocketClientHandshaker) :
     SimpleChannelInboundHandler<FullHttpResponse>() {
     override fun channelRead0(ctx: ChannelHandlerContext, msg: FullHttpResponse) {
