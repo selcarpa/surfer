@@ -23,6 +23,7 @@ import model.config.Socks5OutboundSetting
 import model.protocol.Odor
 import model.protocol.Protocol
 import io.github.oshai.kotlinlogging.KotlinLogging
+import io.netty.handler.logging.ByteBufFormat
 import netty.IdleCloseHandler
 import netty.ProxyChannelInitializer
 import protocol.DiscardHandler
@@ -249,7 +250,7 @@ private fun connect(
 class SurferInitializer(private val handlerPairs: (Channel) -> MutableList<HandlerPair>) :
     ChannelInitializer<Channel>() {
     override fun initChannel(ch: Channel) {
-        ch.pipeline().addFirst(LOG_HANDLER, LoggingHandler(LogLevel.TRACE))
+        ch.pipeline().addFirst(LOG_HANDLER, LoggingHandler(LogLevel.INFO, ByteBufFormat.HEX_DUMP))
         ch.pipeline().addFirst(GLOBAL_TRAFFIC_SHAPING, ProxyChannelInitializer.globalTrafficShapingHandler)
         //todo: set idle timeout, and close channel
         ch.pipeline().addFirst(IDLE_CLOSE_HANDLER, IdleCloseHandler())
