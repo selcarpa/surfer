@@ -6,8 +6,8 @@
     {
       "port": 14270,
       "protocol": "socks5",
-      "socks5Settings": {
-      }
+      "socks5Settings": [
+      ]
     }
   ],
   "outbounds": [
