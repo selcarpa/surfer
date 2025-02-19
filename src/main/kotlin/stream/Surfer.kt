@@ -54,7 +54,7 @@ fun relayAndOutbound(relayAndOutboundOp: RelayAndOutboundOp) {
                 }
             })
         } else {
-            logger.error(future.cause().message)
+            logger.error { future.cause().message }
             logger.debug { future.cause().stackTrace }
             relayAndOutboundOp.connectFail()
         }
@@ -102,6 +102,10 @@ private fun outbound(
                 odor,
                 Protocol.valueOfOrNull(outbound.outboundStreamBy!!.type)
             )
+        }
+
+        Protocol.DISCARD -> {
+            TODO("NOT IMPLEMENTED")
         }
 
         else -> {

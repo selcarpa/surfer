@@ -5,7 +5,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import io.netty.buffer.ByteBuf
 import io.netty.channel.*
 import io.netty.handler.codec.http.FullHttpRequest
-import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.websocketx.*
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.FutureListener
@@ -137,19 +136,4 @@ class WebSocketDuplexHandler(private val handleShakePromise: Promise<Channel>? =
             }
         }
     }
-}
-
-class WebSocketHandshakeHandler(private val handshaker: WebSocketClientHandshaker) :
-    SimpleChannelInboundHandler<FullHttpResponse>() {
-    override fun channelRead0(ctx: ChannelHandlerContext, msg: FullHttpResponse) {
-        if (!handshaker.isHandshakeComplete) {
-            handshaker.finishHandshake(ctx.channel(), msg)
-            ctx.fireUserEventTriggered(
-                WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE
-            )
-            ctx.pipeline().remove(this)
-            return
-        }
-    }
-
 }

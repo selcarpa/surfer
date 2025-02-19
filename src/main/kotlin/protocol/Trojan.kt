@@ -32,6 +32,10 @@ import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import netty.ActiveAutoExecHandler
 import netty.ExceptionCaughtHandler
+import stream.RelayInBound2CTXHandler
+import stream.RelayInBound2EmbeddedChannelHandler
+import stream.RelayOutBound2EmbeddedChannelHandler
+import stream.RelayOutBound2CTXHandler
 import stream.WebSocketDuplexHandler
 import utils.toAddressType
 import utils.toSha224
@@ -192,13 +196,13 @@ class TrojanProxy(
                 }
             })
         embeddedChannel.pipeline().addLast("websocket_duplex_handler", WebSocketDuplexHandler(newPromise))
-        embeddedChannel.pipeline().addFirst("$RELAY_HANDLER_NAME-embedded-outbound", RelayOutBoundHandler1(ctx))
-        embeddedChannel.pipeline().addLast("$RELAY_HANDLER_NAME-embedded-inbound", RelayInBoundHandler2(ctx))
+        embeddedChannel.pipeline().addFirst("$RELAY_HANDLER_NAME-embedded-outbound", RelayOutBound2CTXHandler(ctx))
+        embeddedChannel.pipeline().addLast("$RELAY_HANDLER_NAME-embedded-inbound", RelayInBound2CTXHandler(ctx))
         embeddedChannel.pipeline().addLast(ExceptionCaughtHandler())
 
 
-        ctx.pipeline().addBefore(ctx.name(), "$RELAY_HANDLER_NAME-embedded-inbound", RelayInBoundHandler1(embeddedChannel))
-        ctx.pipeline().addAfter(ctx.name(), "$RELAY_HANDLER_NAME-embedded-outbound", RelayOutBoundHandler2(embeddedChannel))
+        ctx.pipeline().addBefore(ctx.name(), "$RELAY_HANDLER_NAME-embedded-inbound", RelayInBound2EmbeddedChannelHandler(embeddedChannel))
+        ctx.pipeline().addAfter(ctx.name(), "$RELAY_HANDLER_NAME-embedded-outbound", RelayOutBound2EmbeddedChannelHandler(embeddedChannel))
         ctx .pipeline().addLast(ExceptionCaughtHandler())
 
         doFirstSend = {
@@ -257,50 +261,3 @@ class TrojanProxy(
         return true
     }
 }
-
-/**
- * relay from client channel to server
- */
-class RelayOutBoundHandler1(private val channelHandlerContext: ChannelHandlerContext) :
-    ChannelOutboundHandlerAdapter() {
-    override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
-        channelHandlerContext.writeAndFlush(msg, channelHandlerContext.newPromise().addListener {
-            if (it.isSuccess) {
-                promise.setSuccess()
-            } else {
-                promise.setFailure(it.cause())
-            }
-        })
-    }
-}
-/**
- * relay from client channel to server
- */
-class RelayOutBoundHandler2(private val channel: EmbeddedChannel) :
-    ChannelOutboundHandlerAdapter() {
-    override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
-        channel.writeOutbound(msg)
-    }
-}
-
-/**
- * relay from client channel to server
- */
-class RelayInBoundHandler1(private val channel: EmbeddedChannel) :
-    ChannelInboundHandlerAdapter() {
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        channel.writeInbound(msg)
-    }
-}
-
-
-/**
- * relay from client channel to server
- */
-class RelayInBoundHandler2(private val channelHandlerContext: ChannelHandlerContext) :
-    ChannelInboundHandlerAdapter() {
-    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        channelHandlerContext.fireChannelRead(msg)
-    }
-}
-
