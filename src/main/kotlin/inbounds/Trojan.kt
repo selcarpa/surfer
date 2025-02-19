@@ -90,7 +90,7 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
     @Suppress("OVERRIDE_DEPRECATION")
     override fun exceptionCaught(ctx: ChannelHandlerContext, cause: Throwable) {
         if (cause is DecoderException || cause.cause is DecoderException) {
-            logger.warn {
+            logger.warn(cause) {
                 "[${
                     ctx.channel().id().asShortText()
                 }] parse trojan package failed, ${cause.message}, give a discard handler"

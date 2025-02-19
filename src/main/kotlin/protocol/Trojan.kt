@@ -1,13 +1,17 @@
 package protocol
 
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
 import io.netty.channel.*
+import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.DefaultHttpHeaders
+import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.HttpClientCodec
 import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.websocketx.WebSocketClientHandshakerFactory
+import io.netty.handler.codec.http.websocketx.WebSocketClientProtocolHandler
 import io.netty.handler.codec.http.websocketx.WebSocketVersion
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
@@ -17,6 +21,7 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.ReferenceCountUtil
+import model.RELAY_HANDLER_NAME
 import model.TROJAN_PROXY_OUTBOUND
 import model.config.Outbound
 import model.config.OutboundStreamBy
@@ -25,13 +30,9 @@ import model.protocol.Odor
 import model.protocol.Protocol
 import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
-import io.github.oshai.kotlinlogging.KotlinLogging
-import io.netty.handler.codec.http.websocketx.WebSocketClientProtocolHandler
 import netty.ActiveAutoExecHandler
 import netty.ExceptionCaughtHandler
-import org.bouncycastle.est.Source
 import stream.WebSocketDuplexHandler
-import stream.WebSocketHandshakeHandler
 import utils.toAddressType
 import utils.toSha224
 import utils.toUUid
@@ -45,14 +46,6 @@ class TrojanOutboundHandler(
 ) : ChannelDuplexHandler() {
 
     private var handshaked = false
-
-//    constructor(
-//        outbound: Outbound, odor: Odor
-//    ) : this(
-//        outbound.trojanSetting!!, TrojanRequest(
-//            Socks5CommandType.CONNECT.byteValue(), odor.addressType().byteValue(), odor.host, odor.port
-//        )
-//    )
 
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         if (handshaked) {
@@ -100,6 +93,7 @@ class TrojanProxy(
         setConnectSuccess.invoke(this)
     }
 
+    private lateinit var doFirstSend: () -> Unit
 
     constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
@@ -117,7 +111,7 @@ class TrojanProxy(
     }
 
     override fun authScheme(): String {
-        return "none"
+        return "default-auth-scheme"
     }
 
 
@@ -156,40 +150,61 @@ class TrojanProxy(
      * add websocket handler before trojan outbound handler
      */
     private fun addPreHandledWs(ctx: ChannelHandlerContext) {
-        val uri = URI(
-            "${
-                when (streamBy) {
-                    Protocol.WS -> {
+        val newHandshaker = WebSocketClientHandshakerFactory.newHandshaker(
+            URI(
+                "${
+                    if (streamBy == Protocol.WS) {
                         "ws"
-                    }
-                    Protocol.WSS -> {
+                    } else {
                         "wss"
                     }
-                    else -> {
-                        throw IllegalArgumentException("unsupported stream")
-                    }
-                }
-            }://${outboundStreamBy.wsOutboundSetting!!.host}:${outboundStreamBy.wsOutboundSetting!!.port}/${
-                outboundStreamBy.wsOutboundSetting.path.removePrefix(
-                    "/"
-                )
-            }"
+                }://${outboundStreamBy.wsOutboundSetting!!.host}:${outboundStreamBy.wsOutboundSetting.port}/${
+                    outboundStreamBy.wsOutboundSetting.path.removePrefix(
+                        "/"
+                    )
+                }"
+            ), WebSocketVersion.V13, null, true, DefaultHttpHeaders()
         )
-        logger.debug { "[${ctx.channel().id().asShortText()}] websocket handle shake, uri: $uri" }
-        ctx.pipeline().addBefore(ctx.name(), "HttpClientCodec", HttpClientCodec())
-        ctx.pipeline().addBefore(ctx.name(), "HttpObjectAggregator", HttpObjectAggregator(8192))
-        ctx.pipeline()
-            .addBefore(ctx.name(), "WebSocketClientCompressionHandler", WebSocketClientCompressionHandler.INSTANCE)
-
         val newPromise = ctx.channel().eventLoop().newPromise<Channel>()
+        val embeddedChannel = EmbeddedChannel()
         newPromise.addListener {
             if (it.isSuccess) {
                 setThisConnectSuccess()
-                ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
+                embeddedChannel.pipeline().addLast(TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
             }
         }
-        ctx.pipeline().addBefore(ctx.name(), "websocket_duplex_handler", WebSocketDuplexHandler(newPromise))
-        ctx.pipeline().addLast(ExceptionCaughtHandler())
+        //set internal trojan outbound pipes
+        embeddedChannel.pipeline().addLast("HttpClientCodec", HttpClientCodec())
+        embeddedChannel.pipeline().addLast("HttpObjectAggregator", HttpObjectAggregator(65536))
+        embeddedChannel.pipeline()
+            .addLast("WebSocketClientCompressionHandler", WebSocketClientCompressionHandler.INSTANCE)
+        embeddedChannel.pipeline().addLast(
+            "WebSocketHandshakeHandler", object : SimpleChannelInboundHandler<FullHttpResponse>() {
+                override fun channelRead0(ctx2: ChannelHandlerContext, msg: FullHttpResponse) {
+                    if (!newHandshaker.isHandshakeComplete) {
+                        newHandshaker.finishHandshake(ctx2.channel(), msg)
+                        ctx2.fireUserEventTriggered(
+                            WebSocketClientProtocolHandler.ClientHandshakeStateEvent.HANDSHAKE_COMPLETE
+                        )
+                        ctx2.pipeline().remove(this)
+                        return
+                    }
+                }
+            })
+        embeddedChannel.pipeline().addLast("websocket_duplex_handler", WebSocketDuplexHandler(newPromise))
+        embeddedChannel.pipeline().addFirst("$RELAY_HANDLER_NAME-embedded-outbound", RelayOutBoundHandler1(ctx))
+        embeddedChannel.pipeline().addLast("$RELAY_HANDLER_NAME-embedded-inbound", RelayInBoundHandler2(ctx))
+        embeddedChannel.pipeline().addLast(ExceptionCaughtHandler())
+
+
+        ctx.pipeline().addBefore(ctx.name(), "$RELAY_HANDLER_NAME-embedded-inbound", RelayInBoundHandler1(embeddedChannel))
+        ctx.pipeline().addAfter(ctx.name(), "$RELAY_HANDLER_NAME-embedded-outbound", RelayOutBoundHandler2(embeddedChannel))
+        ctx .pipeline().addLast(ExceptionCaughtHandler())
+
+        doFirstSend = {
+            newHandshaker.handshake(embeddedChannel)
+        }
+
     }
 
     /**
@@ -233,39 +248,59 @@ class TrojanProxy(
     }
 
     override fun newInitialMessage(ctx: ChannelHandlerContext): Any? {
-        return when (streamBy) {
-            Protocol.WS, Protocol.WSS -> {
-                val newHandshaker = WebSocketClientHandshakerFactory.newHandshaker(
-                    URI(
-                        "${
-                            if (streamBy == Protocol.WS) {
-                                "ws"
-                            } else {
-                                "wss"
-                            }
-                        }://${outboundStreamBy.wsOutboundSetting!!.host}:${outboundStreamBy.wsOutboundSetting.port}/${
-                            outboundStreamBy.wsOutboundSetting.path.removePrefix(
-                                "/"
-                            )
-                        }"
-                    ), WebSocketVersion.V13, null, true, DefaultHttpHeaders()
-                )
-                ctx.pipeline().addBefore(
-                    "websocket_duplex_handler",
-                    "WebSocketHandshakeHandler",
-                    WebSocketHandshakeHandler(newHandshaker)
-                )
-                newHandshaker.javaClass.declaredMethods.find { it.name == "newHandshakeRequest" }!!.also {
-                    it.isAccessible = true
-                }.invoke(newHandshaker)
-            }
-
-            else -> null
-        }
+        //ignored
+        doFirstSend()
+        return null
     }
 
     override fun handleResponse(ctx: ChannelHandlerContext, response: Any): Boolean {
         return true
+    }
+}
+
+/**
+ * relay from client channel to server
+ */
+class RelayOutBoundHandler1(private val channelHandlerContext: ChannelHandlerContext) :
+    ChannelOutboundHandlerAdapter() {
+    override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
+        channelHandlerContext.writeAndFlush(msg, channelHandlerContext.newPromise().addListener {
+            if (it.isSuccess) {
+                promise.setSuccess()
+            } else {
+                promise.setFailure(it.cause())
+            }
+        })
+    }
+}
+/**
+ * relay from client channel to server
+ */
+class RelayOutBoundHandler2(private val channel: EmbeddedChannel) :
+    ChannelOutboundHandlerAdapter() {
+    override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
+        channel.writeOutbound(msg)
+    }
+}
+
+/**
+ * relay from client channel to server
+ */
+class RelayInBoundHandler1(private val channel: EmbeddedChannel) :
+    ChannelInboundHandlerAdapter() {
+    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+        channel.writeInbound(msg)
+    }
+}
+
+
+/**
+ * relay from client channel to server
+ */
+class RelayInBoundHandler2(private val channelHandlerContext: ChannelHandlerContext) :
+    ChannelInboundHandlerAdapter() {
+    override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
+        channelHandlerContext.fireChannelRead(msg)
     }
 }
 

@@ -1,12 +1,14 @@
 package stream
 
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.*
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.nio.NioDatagramChannel
 import io.netty.channel.socket.nio.NioSocketChannel
+import io.netty.handler.logging.ByteBufFormat
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.proxy.HttpProxyHandler
@@ -22,8 +24,6 @@ import model.config.Outbound
 import model.config.Socks5OutboundSetting
 import model.protocol.Odor
 import model.protocol.Protocol
-import io.github.oshai.kotlinlogging.KotlinLogging
-import io.netty.handler.logging.ByteBufFormat
 import netty.IdleCloseHandler
 import netty.ProxyChannelInitializer
 import protocol.DiscardHandler
@@ -324,6 +324,7 @@ class RelayInboundHandler(private val relayChannel: Channel, private val inActiv
 
     override fun channelActive(ctx: ChannelHandlerContext) {
         ctx.writeAndFlush(Unpooled.EMPTY_BUFFER)
+        ctx.fireChannelActive()
     }
 
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
