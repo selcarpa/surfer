@@ -227,16 +227,9 @@ class TrojanProxy(
     private fun addPreHandledTls(originCTX: ChannelHandlerContext) {
         val sslCtx: SslContext =
             SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
-        embeddedChannel.pipeline().addLast(
+        originCTX.pipeline().addFirst(
             "ssl", sslCtx.newHandler(originCTX.channel().alloc(), socketAddress.hostName, socketAddress.port)
         )
-//        embeddedChannel.pipeline().addLast(EventTriggerHandler { _, evt ->
-//                if (evt is SslHandshakeCompletionEvent) {
-//                embeddedChannel.pipeline().addLast(TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-//                setThisConnectSuccess()
-//            }
-//        })
-
     }
 
 
