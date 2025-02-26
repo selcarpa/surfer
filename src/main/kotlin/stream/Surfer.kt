@@ -43,7 +43,6 @@ fun relayAndOutbound(relayAndOutboundOp: RelayAndOutboundOp) {
         if (future.isSuccess) {
             logger.trace { "outboundChannel: $outboundChannel" }
             relayAndOutboundOp.connectEstablishedCallback(outboundChannel) {
-                logger.info { "connectEstablishedCallback" }
                 outboundChannel.pipeline()
                     .addLast(RELAY_HANDLER_NAME, RelayInboundHandler(relayAndOutboundOp.originCTX.channel()))
                 relayAndOutboundOp.originCTX.pipeline()
