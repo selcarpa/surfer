@@ -159,13 +159,14 @@ class SocksServerConnectHandler(private val inbound: Inbound, private val socks5
             relayAndOutbound(RelayAndOutboundOp(
                 originCTX = originCTX, outbound = outbound, odor = odor
             ).also { relayAndOutboundOp ->
-                relayAndOutboundOp.connectEstablishedCallback = {
+                relayAndOutboundOp.connectEstablishedCallback = {c,f->
                     originCTX.channel().writeAndFlush(
                         DefaultSocks5CommandResponse(
                             Socks5CommandStatus.SUCCESS, message.dstAddrType(), message.dstAddr(), message.dstPort()
                         )
                     ).addListener(ChannelFutureListener {
                         originCTX.pipeline().remove(this@SocksServerConnectHandler)
+                        f()
                     })
                 }
                 relayAndOutboundOp.connectFail = {

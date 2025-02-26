@@ -68,12 +68,13 @@ class TrojanInboundHandler(private val inbound: Inbound) : SimpleChannelInboundH
                     RelayAndOutboundOp(
                         originCTX = originCTX, outbound = outbound, odor = odor
                     ).also { relayAndOutboundOp ->
-                        relayAndOutboundOp.connectEstablishedCallback = {
+                        relayAndOutboundOp.connectEstablishedCallback = {c,f->
                             val payload = Unpooled.buffer()
                             payload.writeBytes(ByteBufUtil.decodeHexDump(trojanPackage.payload))
                             originCTX.pipeline().remove(this@TrojanInboundHandler)
-                            it.writeAndFlush(payload).addListener {
+                            c.writeAndFlush(payload).addListener {
                                 originCTX.channel().config().setAutoRead(true)
+                                f()
                             }
                         }
                         relayAndOutboundOp.connectFail = {

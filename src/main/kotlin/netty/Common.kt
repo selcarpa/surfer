@@ -31,12 +31,10 @@ class ExceptionCaughtHandler : ChannelInboundHandlerAdapter() {
 /**
  * Exposure events
  */
-class EventTriggerHandler(val callBack: (ChannelHandlerContext, Any) -> Boolean) : ChannelInboundHandlerAdapter() {
+class EventTriggerHandler(val callBack: (ChannelHandlerContext, Any) -> Unit) : ChannelInboundHandlerAdapter() {
     override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
         logger.trace { "[${ctx.channel().id().asShortText()}] User event triggered: $evt" }
-        if (callBack(ctx, evt)) {
-            return
-        }
+        callBack(ctx, evt)
         super.userEventTriggered(ctx, evt)
     }
 }

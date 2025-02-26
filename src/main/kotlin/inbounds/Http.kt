@@ -76,11 +76,12 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
             relayAndOutbound(RelayAndOutboundOp(
                 originCTX = originCTX, outbound = outbound, odor = odor
             ).also { relayAndOutboundOp ->
-                relayAndOutboundOp.connectEstablishedCallback = {
-                    it.writeAndFlush(encoded).also {
+                relayAndOutboundOp.connectEstablishedCallback = { c, f ->
+                    c.writeAndFlush(encoded).also {
                         //remove all useless listener
                         originCTX.pipeline().cleanHandlers()
                         originCTX.channel().config().setAutoRead(true)
+                        f()
                     }
                 }
                 relayAndOutboundOp.connectFail = {
@@ -118,13 +119,16 @@ class HttpProxyServerHandler(private val inbound: Inbound) : SimpleChannelInboun
             relayAndOutbound(RelayAndOutboundOp(
                 originCTX = originCTX, outbound = outbound, odor = odor
             ).also { relayAndOutboundOp ->
-                relayAndOutboundOp.connectEstablishedCallback = {
+                relayAndOutboundOp.connectEstablishedCallback = { c, f ->
                     //write Connection Established
                     originCTX.writeAndFlush(
                         DefaultHttpResponse(
                             version,
                             HttpResponseStatus(HttpResponseStatus.OK.code(), "Connection established"),
-                        )
+                        ),
+                        originCTX.newPromise().addListener {
+                            f()
+                        }
                     ).also {
                         originCTX.pipeline().cleanHandlers()
                         //remove all useless listener

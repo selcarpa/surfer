@@ -6,7 +6,6 @@ import io.jpower.kcp.netty.UkcpChannelOption
 import io.jpower.kcp.netty.UkcpServerChannel
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.bootstrap.UkcpServerBootstrap
-import io.netty.buffer.ByteBufAllocator
 import io.netty.buffer.UnpooledByteBufAllocator
 import io.netty.channel.Channel
 import io.netty.channel.ChannelOption

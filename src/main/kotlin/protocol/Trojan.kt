@@ -1,6 +1,5 @@
 package protocol
 
-
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufUtil
@@ -16,11 +15,11 @@ import io.netty.handler.codec.http.websocketx.WebSocketVersion
 import io.netty.handler.codec.http.websocketx.extensions.compression.WebSocketClientCompressionHandler
 import io.netty.handler.codec.socksx.v5.Socks5CommandType
 import io.netty.handler.proxy.ProxyHandler
-import io.netty.handler.ssl.SslCompletionEvent
 import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.ReferenceCountUtil
+import model.DEFAULT_EXCEPTION_CAUGHT_HANDLER_NAME
 import model.RELAY_HANDLER_NAME
 import model.TROJAN_PROXY_OUTBOUND
 import model.config.Outbound
@@ -32,11 +31,7 @@ import model.protocol.TrojanPackage
 import model.protocol.TrojanRequest
 import netty.ActiveAutoExecHandler
 import netty.ExceptionCaughtHandler
-import stream.RelayInBound2CTXHandler
-import stream.RelayInBound2EmbeddedChannelHandler
-import stream.RelayOutBound2EmbeddedChannelHandler
-import stream.RelayOutBound2CTXHandler
-import stream.WebSocketDuplexHandler
+import stream.*
 import utils.toAddressType
 import utils.toSha224
 import utils.toUUid
@@ -91,13 +86,20 @@ class TrojanProxy(
             ProxyHandler::class.java.declaredMethods.find { it.name == "setConnectSuccess" }!!.also {
                 it.isAccessible = true
             }
+        const val EMBEDDED_RELAY_INBOUND_HANDLER_NAME = "${RELAY_HANDLER_NAME}:embedded-inbound"
+        const val EMBEDDED_RELAY_OUTBOUND_HANDLER_NAME = "${RELAY_HANDLER_NAME}:embedded-outbound"
+        const val TO_EMBEDDED_RELAY_INBOUND_HANDLER_NAME = "${RELAY_HANDLER_NAME}:2-embedded-inbound"
+        const val TO_EMBEDDED_RELAY_OUTBOUND_HANDLER_NAME = "${RELAY_HANDLER_NAME}:2-embedded-outbound"
+
     }
 
     private val setThisConnectSuccess = {
         setConnectSuccess.invoke(this)
     }
 
-    private lateinit var doFirstSend: () -> Unit
+    private var doFirstSend: () -> Unit = {}
+
+    private val embeddedChannel = EmbeddedChannel()
 
     constructor(outbound: Outbound, odor: Odor, streamBy: Protocol) : this(
         InetSocketAddress(odor.redirectHost, odor.redirectPort!!),
@@ -119,35 +121,49 @@ class TrojanProxy(
     }
 
 
-    override fun addCodec(ctx: ChannelHandlerContext) {
-        val p = ctx.pipeline()
-        val name = ctx.name()
-
+    override fun addCodec(originCTX: ChannelHandlerContext) {
+        addEmbeddedChannelRelay(originCTX)
         when (streamBy) {
             //when just a plain tcp connect, we just open the tcp connect and add trojan outbound handler
             Protocol.TCP -> {
-                addPreHandledTcp(ctx)
-                p.addBefore(name, TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-                p.addLast("AutoSuccessHandler", ActiveAutoExecHandler { setThisConnectSuccess() })
+                addPreHandledTcp(originCTX)
             }
 
             Protocol.TLS -> {
-                addPreHandledTls(ctx)
+                addPreHandledTls(originCTX)
+                addPreHandledTcp(originCTX)
             }
 
             Protocol.WS -> {
-                addPreHandledWs(ctx)
+                addPreHandledWs(originCTX)
             }
 
             Protocol.WSS -> {
-                addPreHandledTls(ctx)
-                addPreHandledWs(ctx)
+                addPreHandledTls(originCTX)
+                addPreHandledWs(originCTX)
             }
 
             else -> throw IllegalArgumentException("unsupported stream")
         }
 
+        embeddedChannel.pipeline().addLast(EMBEDDED_RELAY_INBOUND_HANDLER_NAME, RelayInBound2CTXHandler(originCTX))
+        embeddedChannel.pipeline().addLast(DEFAULT_EXCEPTION_CAUGHT_HANDLER_NAME, ExceptionCaughtHandler())
+    }
 
+    private fun addEmbeddedChannelRelay(originCTX: ChannelHandlerContext) {
+        embeddedChannel.pipeline().addFirst(EMBEDDED_RELAY_OUTBOUND_HANDLER_NAME, RelayOutBound2CTXHandler(originCTX))
+
+        originCTX.pipeline().addBefore(
+            originCTX.name(),
+            TO_EMBEDDED_RELAY_INBOUND_HANDLER_NAME,
+            RelayInBound2EmbeddedChannelHandler(embeddedChannel)
+        )
+        originCTX.pipeline().addAfter(
+            originCTX.name(),
+            TO_EMBEDDED_RELAY_OUTBOUND_HANDLER_NAME,
+            RelayOutBound2EmbeddedChannelHandler(embeddedChannel)
+        )
+        originCTX.pipeline().addLast(DEFAULT_EXCEPTION_CAUGHT_HANDLER_NAME, ExceptionCaughtHandler())
     }
 
     /**
@@ -170,11 +186,10 @@ class TrojanProxy(
             ), WebSocketVersion.V13, null, true, DefaultHttpHeaders()
         )
         val newPromise = ctx.channel().eventLoop().newPromise<Channel>()
-        val embeddedChannel = EmbeddedChannel()
         newPromise.addListener {
             if (it.isSuccess) {
-                setThisConnectSuccess()
                 embeddedChannel.pipeline().addLast(TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
+                setThisConnectSuccess()
             }
         }
         //set internal trojan outbound pipes
@@ -192,18 +207,13 @@ class TrojanProxy(
                         )
                         ctx2.pipeline().remove(this)
                         return
+                    } else {
+                        ctx.fireChannelRead(msg)
                     }
                 }
             })
         embeddedChannel.pipeline().addLast("websocket_duplex_handler", WebSocketDuplexHandler(newPromise))
-        embeddedChannel.pipeline().addFirst("$RELAY_HANDLER_NAME-embedded-outbound", RelayOutBound2CTXHandler(ctx))
-        embeddedChannel.pipeline().addLast("$RELAY_HANDLER_NAME-embedded-inbound", RelayInBound2CTXHandler(ctx))
-        embeddedChannel.pipeline().addLast(ExceptionCaughtHandler())
 
-
-        ctx.pipeline().addBefore(ctx.name(), "$RELAY_HANDLER_NAME-embedded-inbound", RelayInBound2EmbeddedChannelHandler(embeddedChannel))
-        ctx.pipeline().addAfter(ctx.name(), "$RELAY_HANDLER_NAME-embedded-outbound", RelayOutBound2EmbeddedChannelHandler(embeddedChannel))
-        ctx .pipeline().addLast(ExceptionCaughtHandler())
 
         doFirstSend = {
             newHandshaker.handshake(embeddedChannel)
@@ -214,23 +224,18 @@ class TrojanProxy(
     /**
      * add tls handler before trojan outbound handler
      */
-    private fun addPreHandledTls(ctx: ChannelHandlerContext) {
+    private fun addPreHandledTls(originCTX: ChannelHandlerContext) {
         val sslCtx: SslContext =
             SslContextBuilder.forClient().trustManager(InsecureTrustManagerFactory.INSTANCE).build()
-        ctx.pipeline().addBefore(
-            ctx.name(), "ssl", sslCtx.newHandler(ctx.channel().alloc(), socketAddress.hostName, socketAddress.port)
+        embeddedChannel.pipeline().addLast(
+            "ssl", sslCtx.newHandler(originCTX.channel().alloc(), socketAddress.hostName, socketAddress.port)
         )
-        ctx.pipeline().addLast(object : ChannelInboundHandlerAdapter() {
-            override fun userEventTriggered(ctx: ChannelHandlerContext, evt: Any) {
-                if (evt is SslCompletionEvent) {
-                    ctx.pipeline().addBefore(ctx.name(), TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
-                    setThisConnectSuccess()
-                    ctx.pipeline().remove(this)
-                    return
-                }
-                super.userEventTriggered(ctx, evt)
-            }
-        })
+//        embeddedChannel.pipeline().addLast(EventTriggerHandler { _, evt ->
+//                if (evt is SslHandshakeCompletionEvent) {
+//                embeddedChannel.pipeline().addLast(TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
+//                setThisConnectSuccess()
+//            }
+//        })
 
     }
 
@@ -238,9 +243,9 @@ class TrojanProxy(
     /**
      * tcp stream needn't any handler
      */
-    @Suppress("UNUSED_PARAMETER")
     private fun addPreHandledTcp(ctx: ChannelHandlerContext) {
-        //ignored
+        embeddedChannel.pipeline().addLast(TROJAN_PROXY_OUTBOUND, trojanOutboundHandler)
+        ctx.pipeline().addLast("AutoSuccessHandler", ActiveAutoExecHandler { setThisConnectSuccess() })
     }
 
     override fun removeEncoder(ctx: ChannelHandlerContext) {

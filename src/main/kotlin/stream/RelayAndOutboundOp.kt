@@ -1,7 +1,6 @@
 package stream
 
 import io.netty.channel.Channel
-import io.netty.channel.ChannelFuture
 import io.netty.channel.ChannelHandlerContext
 import model.config.Outbound
 import model.protocol.Odor
@@ -22,7 +21,7 @@ data class RelayAndOutboundOp(
     /**
      * when connect established, do something
      */
-    var connectEstablishedCallback: (Channel) -> ChannelFuture = { it.newPromise().setSuccess() };
+    var connectEstablishedCallback: (Channel, () -> Unit) -> Unit = { _, f -> f() }
 
     /**
      * when add relay handler to origin channel, do something

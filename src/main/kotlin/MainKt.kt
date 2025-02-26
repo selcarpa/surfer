@@ -15,7 +15,6 @@ object MainKt {
             argCommandExec(it)
         }
 
-//        loadLogConfig()
         loadLogConfig()
 
         NettyServer.start()

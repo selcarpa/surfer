@@ -1,12 +1,14 @@
 package model
 
-const val RELAY_HANDLER_NAME = "relay_handler"
-const val PROXY_HANDLER_NAME = "proxy_handler"
+
+const val RELAY_HANDLER_NAME = "relay"
+const val PROXY_HANDLER_NAME = "proxy"
 const val TROJAN_PROXY_OUTBOUND = "trojan_proxy_outbound"
-const val LOG_HANDLER = "log_handler"
-const val IDLE_CLOSE_HANDLER = "idle_close_handler"
-const val IDLE_CHECK_HANDLER = "idle_check_handler"
+const val LOG_HANDLER = "log"
+const val IDLE_CLOSE_HANDLER = "idle_close"
+const val IDLE_CHECK_HANDLER = "idle_check"
 const val GLOBAL_TRAFFIC_SHAPING = "global_traffic_shaping"
+const val DEFAULT_EXCEPTION_CAUGHT_HANDLER_NAME = "exception_caught"
 
 
 enum class LogLevel {

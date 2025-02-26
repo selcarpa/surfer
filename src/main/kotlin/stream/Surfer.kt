@@ -42,17 +42,14 @@ fun relayAndOutbound(relayAndOutboundOp: RelayAndOutboundOp) {
         val outboundChannel = future.now
         if (future.isSuccess) {
             logger.trace { "outboundChannel: $outboundChannel" }
-            relayAndOutboundOp.connectEstablishedCallback(outboundChannel).addListener(FutureListener {
-                if (it.isSuccess) {
-                    outboundChannel.pipeline()
-                        .addLast(RELAY_HANDLER_NAME, RelayInboundHandler(relayAndOutboundOp.originCTX.channel()))
-                    relayAndOutboundOp.originCTX.pipeline()
-                        .addLast(RELAY_HANDLER_NAME, relayAndOutboundOp.originCTXRelayHandler(outboundChannel))
-                    relayAndOutboundOp.afterAddRelayHandler(outboundChannel)
-                } else {
-                    logger.error(it.cause()) { "connectEstablishedCallback fail: ${it.cause().message}" }
-                }
-            })
+            relayAndOutboundOp.connectEstablishedCallback(outboundChannel) {
+                logger.info { "connectEstablishedCallback" }
+                outboundChannel.pipeline()
+                    .addLast(RELAY_HANDLER_NAME, RelayInboundHandler(relayAndOutboundOp.originCTX.channel()))
+                relayAndOutboundOp.originCTX.pipeline()
+                    .addLast(RELAY_HANDLER_NAME, relayAndOutboundOp.originCTXRelayHandler(outboundChannel))
+                relayAndOutboundOp.afterAddRelayHandler(outboundChannel)
+            }
         } else {
             logger.error { future.cause().message }
             logger.debug { future.cause().stackTrace }
