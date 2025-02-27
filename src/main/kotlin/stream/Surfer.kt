@@ -101,13 +101,17 @@ private fun outbound(
         }
 
         Protocol.DISCARD -> {
-            TODO("NOT IMPLEMENTED")
+            discardStream(connectListener, odor, eventLoopGroup)
         }
 
         else -> {
             logger.error { "stream type ${desProtocol.name} not supported" }
         }
     }
+}
+
+fun discardStream(connectListener: FutureListener<Channel>, odor: Odor, eventLoopGroup: EventLoopGroup) {
+    TODO("Not yet implemented")
 }
 
 fun setOdorRedirect(protocol: Protocol, outbound: Outbound, odor: Odor) {

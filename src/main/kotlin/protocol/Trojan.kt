@@ -70,7 +70,7 @@ class TrojanOutboundHandler(
  */
 fun byteBuf2TrojanPackage(msg: ByteBuf, trojanSetting: TrojanSetting, trojanRequest: TrojanRequest): TrojanPackage =
     TrojanPackage(
-        trojanSetting.password.toUUid().toString().toSha224(), trojanRequest, ByteBufUtil.hexDump(msg)
+        trojanSetting.password.toSha224(), trojanRequest, ByteBufUtil.hexDump(msg)
     )
 
 

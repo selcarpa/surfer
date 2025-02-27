@@ -1,6 +1,7 @@
 package inbounds
 
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.netty.channel.ChannelFutureListener
 import io.netty.channel.ChannelHandler.Sharable
 import io.netty.channel.ChannelHandlerContext
@@ -12,7 +13,6 @@ import model.config.Inbound
 import model.config.Socks5Setting
 import model.protocol.Odor
 import model.protocol.Protocol
-import io.github.oshai.kotlinlogging.KotlinLogging
 import rule.resolveOutbound
 import stream.RelayAndOutboundOp
 import stream.relayAndOutbound
@@ -156,23 +156,24 @@ class SocksServerConnectHandler(private val inbound: Inbound, private val socks5
 
         resolveOutbound.ifPresent { outbound ->
 
-            relayAndOutbound(RelayAndOutboundOp(
-                originCTX = originCTX, outbound = outbound, odor = odor
-            ).also { relayAndOutboundOp ->
-                relayAndOutboundOp.connectEstablishedCallback = {c,f->
-                    originCTX.channel().writeAndFlush(
-                        DefaultSocks5CommandResponse(
-                            Socks5CommandStatus.SUCCESS, message.dstAddrType(), message.dstAddr(), message.dstPort()
-                        )
-                    ).addListener(ChannelFutureListener {
-                        originCTX.pipeline().remove(this@SocksServerConnectHandler)
-                        f()
-                    })
-                }
-                relayAndOutboundOp.connectFail = {
-                    originCTX.close()
-                }
-            })
+            relayAndOutbound(
+                RelayAndOutboundOp(
+                    originCTX = originCTX, outbound = outbound, odor = odor
+                ).also { relayAndOutboundOp ->
+                    relayAndOutboundOp.connectEstablishedCallback = { proxyChannel, f ->
+                        originCTX.channel().writeAndFlush(
+                            DefaultSocks5CommandResponse(
+                                Socks5CommandStatus.SUCCESS, message.dstAddrType(), message.dstAddr(), message.dstPort()
+                            )
+                        ).addListener(ChannelFutureListener {
+                            originCTX.pipeline().remove(this@SocksServerConnectHandler)
+                            f()
+                        })
+                    }
+                    relayAndOutboundOp.connectFail = {
+                        originCTX.close()
+                    }
+                })
         }
 
     }
