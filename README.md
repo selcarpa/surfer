@@ -8,7 +8,7 @@ The purpose is to use kotlin netty to implement some protocols supported by v2ra
 
 ### compile environment
 
-- jdk 11
+- jdk 21
 
 ## quick start
 
