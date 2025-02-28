@@ -68,7 +68,7 @@ tasks.register<Exec>("jvmDockerBuildx") {
         "buildx",
         "build",
         "--platform",
-        "linux/amd64,linux/arm/v7,linux/arm64/v8,linux/ppc64le,linux/s390x,windows/amd64",
+        "linux/amd64,linux/arm64/v8,linux/ppc64le,linux/s390x,linux/riscv64,windows/amd64",
         "-t",
         "selcarpa/surfer:$version",
         if(properties["release"]=="true"){
